@@ -603,6 +603,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <h2>3 &middot; Check it over <span class="cnt" id="prepCount"></span></h2>
       <div id="prepSummary"></div>
       <div class="btnrow" style="margin-top:0;margin-bottom:12px">
+        <button class="btn ghost" id="ownedBtn">Mark all as already owned</button>
         <button class="btn ghost" id="printBtn">Print the price list</button>
         <button class="btn ghost" id="exportBtn">Send me a backup</button>
         <button class="btn ghost" id="wipeBtn">Clear everything</button>
@@ -1061,7 +1062,7 @@ function renderPrepSummary(placed){
   $("prepSummary").innerHTML =
     '<div><div class="n tnum">' + S.cards.length + '</div><div class="k">Cards loaded</div></div>' +
     '<div><div class="n tnum' + (unpriced ? " warn" : "") + '">' + unpriced + '</div><div class="k">Still need a price</div></div>' +
-    '<div><div class="n tnum">' + costed + '</div><div class="k">Have what you paid</div></div>' +
+    '<div><div class="n tnum">' + costed + '</div><div class="k">Cost recorded</div></div>' +
     '<div><div class="n tnum">' + inCase + '</div><div class="k">Out in the case</div></div>';
 }
 
@@ -1125,7 +1126,7 @@ function renderTrade(){
 
   var myCost = sumCost(deal.mine);
   renderProfit($("trProfit"), myCost == null ? null : t.theirCredit - myCost,
-    myCost == null ? "No cost recorded on your side" : "Their credit minus what you paid");
+    myCost == null ? "No cost recorded on your side" : (myCost === 0 ? "All profit, you already owned it" : "Their credit minus what you paid"));
 }
 
 /* ============================ sell ============================ */
@@ -1152,7 +1153,7 @@ function renderSell(){
 
   var cost = c && c.cost != null && c.cost !== "" ? Number(c.cost) : null;
   renderProfit($("seProfit"), (cost == null || offer == null) ? null : offer - cost,
-    cost == null ? "No cost recorded on this card" : "Their offer minus what you paid");
+    cost == null ? "No cost recorded on this card" : (cost === 0 ? "All profit, you already owned it" : "Their offer minus what you paid"));
 }
 
 /* ============================ buy ============================ */
@@ -1697,6 +1698,25 @@ $("pasteBtn").addEventListener("click", function(){
 });
 $("priceBtn").addEventListener("click", function(){ priceCards(false); });
 $("priceAllBtn").addEventListener("click", function(){ priceCards(true); });
+/* A collection built years ago cost nothing to acquire now, so every sale off
+   it is profit. Without this the app treats a blank cost as unknown and refuses
+   to show profit at all, which hides the number he most wants to see. Anything
+   bought later at a table still gets its real cost from the Buy tab. */
+$("ownedBtn").addEventListener("click", function(){
+  var todo = S.cards.filter(function(c){ return c.cost == null || c.cost === ""; });
+  if(!todo.length){ 
+    var st0 = $("priceStatus"); st0.className = "status"; 
+    st0.textContent = "Every card already has a cost on it."; return;
+  }
+  if(!confirm("Set the cost of " + plural(todo.length, "card") + " to nothing?\n\n" +
+              "Use this for cards you already owned. Every sale off them then counts as pure profit. " +
+              "Cards you buy at a show keep the price you actually paid.")) return;
+  todo.forEach(function(c){ c.cost = 0; });
+  save(); render();
+  var st = $("priceStatus");
+  st.className = "status ok";
+  st.textContent = "Marked " + plural(todo.length, "card") + " as already owned. Profit now shows the full sale price on those.";
+});
 $("printBtn").addEventListener("click", function(){ buildPrintSheet(); window.print(); });
 function backupCsv(){
   var lines = [["name","set","number","condition","market","cost"].join(",")];
