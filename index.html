@@ -140,9 +140,17 @@ header{
 }
 .field:focus{outline:0;border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,26,34,.07)}
 .field::placeholder{color:var(--faint)}
+.sorts{display:flex;gap:5px;margin-top:9px}
+.sorts button{
+  flex:1;border:1px solid var(--edge);border-radius:var(--r-chip);padding:6px 4px;
+  font-size:12px;font-weight:600;color:var(--soft);background:var(--sheet);
+  transition:background .18s var(--ease),color .18s var(--ease),border-color .18s var(--ease);
+}
+.sorts button:hover{background:var(--slot);color:var(--ink)}
+.sorts button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
 .list{margin-top:11px;max-height:min(50vh,430px);overflow-y:auto;display:flex;flex-direction:column;gap:5px}
 .row{
-  display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;
+  display:grid;grid-template-columns:1fr auto auto;gap:3px 10px;align-items:center;
   border:1px solid var(--edge);border-radius:var(--r-tile);padding:9px 11px;
   text-align:left;width:100%;background:var(--sheet);
   transition:background .16s var(--ease),border-color .16s var(--ease),transform .16s var(--ease);
@@ -222,6 +230,19 @@ body.moving #moveHint{display:block}
   font-size:11.5px;color:var(--faint);margin-top:9px}
 .binderdrop.over{border-color:var(--ink);background:var(--slot);color:var(--ink)}
 .row.dragging{opacity:.4}
+.del{
+  grid-column:3;grid-row:1/3;align-self:center;
+  width:28px;height:28px;border-radius:var(--r-chip);flex:none;
+  border:1px solid var(--edge);background:var(--sheet);color:var(--faint);
+  font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;
+  transition:background .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease);
+}
+.del:hover{background:var(--bad-bg);border-color:#EFCFC3;color:var(--bad)}
+.cslot .del{
+  position:absolute;top:4px;right:4px;width:20px;height:20px;font-size:13px;
+  grid-column:auto;grid-row:auto;
+}
+.cslot{position:relative}
 
 /* ---------- add row ---------- */
 .addrow{display:grid;grid-template-columns:1fr 78px 78px auto;gap:6px;margin-top:11px}
@@ -451,6 +472,11 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
     <div class="panel" style="margin-top:16px">
       <h2>The binder <span class="cnt" id="cardCount"></span></h2>
       <input class="field" id="search" type="search" placeholder="Search the binder" autocomplete="off" aria-label="Search the binder">
+      <div class="sorts" id="sorts" role="group" aria-label="Order the binder">
+        <button data-sort="price-desc">Dearest first</button>
+        <button data-sort="price-asc">Cheapest first</button>
+        <button data-sort="name">A to Z</button>
+      </div>
       <div class="list" id="cardList"></div>
       <div class="binderdrop" id="binderDrop">Drag a card here, or tap here while rearranging, to pull it out of the case</div>
       <div class="addrow">
@@ -710,6 +736,7 @@ var S = {
   apiKey: "",
   displays: [],
   curDisp: 0,
+  sort: "price-desc",
   log: [],
   showProfit: false
 };
@@ -717,7 +744,7 @@ var deal = { tab:"trade", mine:[], theirs:[], sellId:null, sellOffer:null, buyMk
 var seq = 1;
 
 function snapshot(){
-  return { cards:S.cards, rates:S.rates, log:S.log, apiKey:S.apiKey, displays:S.displays };
+  return { cards:S.cards, rates:S.rates, log:S.log, apiKey:S.apiKey, displays:S.displays, sort:S.sort };
 }
 var saveTimer = null;
 function save(){
@@ -742,6 +769,7 @@ function applyState(d){
   if(Array.isArray(d.log)) S.log = d.log;
   if(typeof d.apiKey === "string") S.apiKey = d.apiKey;
   if(Array.isArray(d.displays)) S.displays = d.displays;
+  if(typeof d.sort === "string") S.sort = d.sort;
   seq = 1;
   S.cards.forEach(function(c){ if(c.id >= seq) seq = c.id + 1; });
   return true;
@@ -876,10 +904,12 @@ function slotHtmlCase(entry, di, ri, i, selIds){
   var c = cardById(entry);
   if(!c) return '<div class="cslot tail" ' + pos + ' data-kind="gap">missing</div>';
   var held = carried && carried.from === "case" && carried.pos.d === di && carried.pos.r === ri && carried.pos.i === i;
-  return '<button class="cslot' + (held ? " carried" : "") + '" draggable="true" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
+  return '<span class="cslot' + (held ? " carried" : "") + '" draggable="true" role="button" tabindex="0" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
     ' aria-pressed="' + (selIds[c.id] ? "true" : "false") + '" title="' + esc(c.name) + '">' +
     '<span class="nm">' + esc(c.name) + '</span>' +
-    '<span class="pr tnum">' + money(c.market) + '</span></button>';
+    '<span class="pr tnum">' + money(c.market) + '</span>' +
+    '<button class="del" data-outof="' + di + '-' + ri + '-' + i + '" title="Take out of the case" aria-label="Take ' + esc(c.name) + ' out of the case">&times;</button>' +
+  '</span>';
 }
 function renderCase(){
   ensureDisplays();
@@ -1022,20 +1052,39 @@ document.addEventListener("drop", function(e){
 function cardRowHtml(c, pressed, drag){
   var meta = [c.set, c.num, c.cond].filter(Boolean).join(" · ");
   var held = carried && carried.from === "binder" && carried.id === c.id;
-  return '<button class="row' + (held ? " carried" : "") + '"' + (drag ? ' draggable="true"' : "") + ' data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
+  var paid = c.cost != null && c.cost !== ""
+    ? '<small>' + (Number(c.cost) === 0 ? "already owned" : "paid " + money(Number(c.cost))) + '</small>' : "";
+  return '<div class="row' + (held ? " carried" : "") + '"' + (drag ? ' draggable="true"' : "") +
+    ' role="button" tabindex="0" data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
     '<span class="nm">' + esc(c.name) + '</span>' +
-    '<span class="pr tnum">' + money(c.market) + (c.cost != null && c.cost !== "" ? '<small>paid ' + money(Number(c.cost)) + '</small>' : "") + '</span>' +
+    '<span class="pr tnum">' + money(c.market) + paid + '</span>' +
     (meta ? '<span class="mt">' + esc(meta) + '</span>' : "") +
-  '</button>';
+    '<button class="del" data-del="' + c.id + '" title="Remove this card" aria-label="Remove ' + esc(c.name) + '">&times;</button>' +
+  '</div>';
+}
+/* Dearest first by default: at a table the expensive cards are the ones being
+   asked about, and they should never be a scroll away. */
+function sortCards(list){
+  var by = S.sort;
+  return list.slice().sort(function(a, b){
+    if(by === "name") return String(a.name).localeCompare(String(b.name), "en", {sensitivity:"base"});
+    var av = a.market == null || a.market === "" ? -1 : Number(a.market);
+    var bv = b.market == null || b.market === "" ? -1 : Number(b.market);
+    if(av === bv) return String(a.name).localeCompare(String(b.name), "en", {sensitivity:"base"});
+    return by === "price-asc" ? av - bv : bv - av;
+  });
 }
 function renderCards(){
   var q = ($("search").value || "").trim().toLowerCase();
   var mineIds = deal.mine.map(function(c){ return c.id; });
   var placed = placedIds();
   var binder = S.cards.filter(function(c){ return !placed[c.id]; });
-  var hits = binder.filter(function(c){
+  var hits = sortCards(binder.filter(function(c){
     if(!q) return true;
     return (c.name + " " + (c.set||"") + " " + (c.num||"")).toLowerCase().indexOf(q) > -1;
+  }));
+  [].forEach.call($("sorts").children, function(btn){
+    btn.setAttribute("aria-pressed", btn.dataset.sort === S.sort ? "true" : "false");
   });
   $("cardCount").textContent = binder.length ? (q ? hits.length + " of " + binder.length : plural(binder.length, "card")) : "";
   $("cardList").innerHTML = hits.length
@@ -1045,7 +1094,7 @@ function renderCards(){
   $("prepCount").textContent = S.cards.length ? plural(S.cards.length, "card") : "";
   renderPrepSummary(placed);
   $("prepList").innerHTML = S.cards.length
-    ? S.cards.map(function(c){ return cardRowHtml(c, false, false); }).join("")
+    ? sortCards(S.cards).map(function(c){ return cardRowHtml(c, false, false); }).join("")
     : '<p class="empty">Nothing imported yet.</p>';
 }
 
@@ -1064,6 +1113,24 @@ function renderPrepSummary(placed){
     '<div><div class="n tnum' + (unpriced ? " warn" : "") + '">' + unpriced + '</div><div class="k">Still need a price</div></div>' +
     '<div><div class="n tnum">' + costed + '</div><div class="k">Cost recorded</div></div>' +
     '<div><div class="n tnum">' + inCase + '</div><div class="k">Out in the case</div></div>';
+}
+
+/* Deleting a card has to clear it out of any display too, and without leaving
+   a sold marker behind: a bad scan was never sold, it just should not exist. */
+function deleteCard(id){
+  var c = cardById(id);
+  if(!c) return;
+  if(!confirm("Remove " + c.name + " for good?\n\nThis deletes the card, it does not record a sale.")) return;
+  S.displays.forEach(function(d){
+    d.rows.forEach(function(r){
+      for(var i = r.length - 1; i >= 0; i--){ if(r[i] === id) r.splice(i, 1); }
+    });
+  });
+  S.cards = S.cards.filter(function(x){ return x.id !== id; });
+  deal.mine = deal.mine.filter(function(x){ return x.id !== id; });
+  if(deal.sellId === id){ deal.sellId = null; deal.sellOffer = null; $("seOffer").value = ""; }
+  if(carried && carried.from === "binder" && carried.id === id) carried = null;
+  save(); render();
 }
 
 /* ============================ trade ============================ */
@@ -1498,6 +1565,8 @@ function chooseCard(c){
   render();
 }
 $("cardList").addEventListener("click", function(e){
+  var del = e.target.closest("[data-del]");
+  if(del){ e.stopPropagation(); deleteCard(parseInt(del.dataset.del, 10)); return; }
   var b = e.target.closest(".row"); if(!b) return;
   var id = parseInt(b.dataset.id, 10);
   if(moveMode){
@@ -1516,6 +1585,14 @@ $("binderDrop").addEventListener("click", function(){
   carried = null; save(); updateMoveHint(); render();
 });
 $("caseRows").addEventListener("click", function(e){
+  var out = e.target.closest("[data-outof]");
+  if(out){
+    e.stopPropagation();
+    var p = out.dataset.outof.split("-").map(Number);
+    takeSlot(p[0], p[1], p[2]);      /* straight back to the binder, nothing lost */
+    carried = null; save(); render();
+    return;
+  }
   if(moveMode){
     var slot = e.target.closest(".cslot");
     if(slot){
@@ -1549,6 +1626,14 @@ $("caseTabs").addEventListener("click", function(e){
     S.displays.push({ name: "Case " + (S.displays.length + 1), rows: [[],[]] });
     S.curDisp = S.displays.length - 1; save(); render();
   }
+});
+$("prepList").addEventListener("click", function(e){
+  var del = e.target.closest("[data-del]");
+  if(del) deleteCard(parseInt(del.dataset.del, 10));
+});
+$("sorts").addEventListener("click", function(e){
+  var b = e.target.closest("[data-sort]"); if(!b) return;
+  S.sort = b.dataset.sort; save(); renderCards();
 });
 $("addRowBtn").addEventListener("click", function(){ curDisplay().rows.push([]); save(); render(); });
 $("renameCaseBtn").addEventListener("click", function(){
@@ -1657,6 +1742,9 @@ $("custBtn").addEventListener("click", function(){ toggleCust(true); });
 $("cust").addEventListener("click", function(){ toggleCust(false); });
 
 document.addEventListener("keydown", function(e){
+  if((e.key === "Enter" || e.key === " ") && e.target.getAttribute && e.target.getAttribute("role") === "button"){
+    e.preventDefault(); e.target.click(); return;
+  }
   var t = e.target.tagName;
   var typing = t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
   if(e.key === "Escape"){ toggleCust(false); return; }
