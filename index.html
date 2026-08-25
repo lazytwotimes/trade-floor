@@ -751,6 +751,22 @@ function readLocal(){
     return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
+/* Anything imported before the fix above is sitting in the database with the
+   quotes still attached. Clean it in place once, so nothing has to be imported
+   a second time. */
+function repairQuotes(){
+  var fixed = 0;
+  S.cards.forEach(function(c){
+    ["name","set","num","cond"].forEach(function(f){
+      if(typeof c[f] === "string"){
+        var t = unquote(c[f]);
+        if(t !== c[f]){ c[f] = t; fixed++; }
+      }
+    });
+  });
+  if(fixed) save();
+  return fixed;
+}
 function load(){
   return Store.get(KEY).then(function(d){
     if(d && applyState(d)) return "database";
@@ -1284,10 +1300,21 @@ var COLS = {
   cost:  ["cost","paid","purchase price","cost basis","buy price","acquired"],
   qty:   ["qty","quantity","count","copies"]
 };
+/* Some exports wrap every field in quotes and then quote the whole thing again,
+   which leaves a real quote character sitting inside the value once the row is
+   parsed. A card name never legitimately opens and closes with one, so a
+   matching outer pair is peeled off. */
+function unquote(v){
+  var t = String(v == null ? "" : v).trim();
+  while(t.length > 1 && t.charAt(0) === '"' && t.charAt(t.length - 1) === '"'){
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
 function mapHeaders(head){
   var map = {}, i, h;
   for(i = 0; i < head.length; i++){
-    h = String(head[i]).trim().toLowerCase().replace(/[_-]+/g, " ");
+    h = unquote(head[i]).toLowerCase().replace(/[_-]+/g, " ");
     for(var key in COLS){
       if(map[key] === undefined && COLS[key].indexOf(h) > -1){ map[key] = i; break; }
     }
@@ -1307,19 +1334,19 @@ function importCsv(text){
   var added = 0, skipped = 0;
   for(var r = 1; r < rows.length; r++){
     var row = rows[r];
-    var nm = String(row[map.name] || "").trim();
+    var nm = unquote(row[map.name]);
     if(!nm){ skipped++; continue; }
-    var qty = map.qty !== undefined ? (parseInt(row[map.qty], 10) || 1) : 1;
+    var qty = map.qty !== undefined ? (parseInt(unquote(row[map.qty]), 10) || 1) : 1;
     if(qty > 40) qty = 40;
     for(var k = 0; k < qty; k++){
       S.cards.push({
         id: seq++,
         name: nm,
-        set:  map.set  !== undefined ? String(row[map.set]  || "").trim() : "",
-        num:  map.num  !== undefined ? String(row[map.num]  || "").trim() : "",
+        set:  map.set  !== undefined ? unquote(row[map.set]) : "",
+        num:  map.num  !== undefined ? unquote(row[map.num]) : "",
         cond: map.cond !== undefined ? String(row[map.cond] || "").trim() : "",
-        market: map.market !== undefined ? parseMoney(row[map.market]) : null,
-        cost:   map.cost   !== undefined ? parseMoney(row[map.cost])   : null
+        market: map.market !== undefined ? parseMoney(unquote(row[map.market])) : null,
+        cost:   map.cost   !== undefined ? parseMoney(unquote(row[map.cost]))   : null
       });
       added++;
     }
@@ -1746,6 +1773,7 @@ render();
 
 load().then(function(){
   ensureDisplays();
+  repairQuotes();
   render();
   return Store.healthy();
 }).then(function(ok){
