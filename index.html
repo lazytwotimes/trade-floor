@@ -1344,7 +1344,7 @@ function importCsv(text){
         name: nm,
         set:  map.set  !== undefined ? unquote(row[map.set]) : "",
         num:  map.num  !== undefined ? unquote(row[map.num]) : "",
-        cond: map.cond !== undefined ? String(row[map.cond] || "").trim() : "",
+        cond: map.cond !== undefined ? unquote(row[map.cond]) : "",
         market: map.market !== undefined ? parseMoney(unquote(row[map.market])) : null,
         cost:   map.cost   !== undefined ? parseMoney(unquote(row[map.cost]))   : null
       });
