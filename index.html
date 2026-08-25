@@ -205,6 +205,14 @@ body.moving #moveHint{display:block}
   border-style:dashed;border-color:var(--edge-2);background:transparent;
   justify-content:center;align-items:center;color:var(--faint);font-size:9px;text-align:center;
 }
+#prepSummary{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--edge);
+  border:1px solid var(--edge);border-radius:var(--r-tile);overflow:hidden;margin-bottom:13px}
+@media (min-width:620px){#prepSummary{grid-template-columns:repeat(4,1fr)}}
+#prepSummary div{background:var(--sheet);padding:11px 12px}
+#prepSummary .n{font-family:var(--disp);font-weight:800;font-size:21px;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+#prepSummary .n.warn{color:var(--warn)}
+#prepSummary .k{font-size:10.5px;color:var(--faint);margin-top:1px;line-height:1.3}
 #pasteBox{margin-top:11px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:11px 13px}
 #pasteBox summary{font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
 #pasteBox summary:hover{color:var(--ink)}
@@ -593,9 +601,10 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 
     <div class="panel" style="grid-column:1/-1">
       <h2>3 &middot; Check it over <span class="cnt" id="prepCount"></span></h2>
+      <div id="prepSummary"></div>
       <div class="btnrow" style="margin-top:0;margin-bottom:12px">
         <button class="btn ghost" id="printBtn">Print the price list</button>
-        <button class="btn ghost" id="exportBtn">Save a backup file</button>
+        <button class="btn ghost" id="exportBtn">Send me a backup</button>
         <button class="btn ghost" id="wipeBtn">Clear everything</button>
       </div>
       <div class="list" id="prepList" style="max-height:none"></div>
@@ -1017,9 +1026,27 @@ function renderCards(){
     : '<p class="empty">' + (binder.length ? "Nothing matches that."
         : (S.cards.length ? "Every card is out in the case." : "No cards yet.<br>Add one below, or import your Deck Tradr file in Prep.")) + '</p>';
   $("prepCount").textContent = S.cards.length ? plural(S.cards.length, "card") : "";
+  renderPrepSummary(placed);
   $("prepList").innerHTML = S.cards.length
     ? S.cards.map(function(c){ return cardRowHtml(c, false, false); }).join("")
     : '<p class="empty">Nothing imported yet.</p>';
+}
+
+/* The import message disappears on the next reload, which left no way to tell
+   what actually made it in. These counts are always there. */
+function renderPrepSummary(placed){
+  var priced = 0, costed = 0, inCase = 0;
+  S.cards.forEach(function(c){
+    if(c.market != null && c.market !== "") priced++;
+    if(c.cost   != null && c.cost   !== "") costed++;
+    if(placed[c.id]) inCase++;
+  });
+  var unpriced = S.cards.length - priced;
+  $("prepSummary").innerHTML =
+    '<div><div class="n tnum">' + S.cards.length + '</div><div class="k">Cards loaded</div></div>' +
+    '<div><div class="n tnum' + (unpriced ? " warn" : "") + '">' + unpriced + '</div><div class="k">Still need a price</div></div>' +
+    '<div><div class="n tnum">' + costed + '</div><div class="k">Have what you paid</div></div>' +
+    '<div><div class="n tnum">' + inCase + '</div><div class="k">Out in the case</div></div>';
 }
 
 /* ============================ trade ============================ */
@@ -1644,17 +1671,34 @@ $("pasteBtn").addEventListener("click", function(){
 $("priceBtn").addEventListener("click", function(){ priceCards(false); });
 $("priceAllBtn").addEventListener("click", function(){ priceCards(true); });
 $("printBtn").addEventListener("click", function(){ buildPrintSheet(); window.print(); });
-$("exportBtn").addEventListener("click", function(){
+function backupCsv(){
   var lines = [["name","set","number","condition","market","cost"].join(",")];
   S.cards.forEach(function(c){
     lines.push([c.name, c.set, c.num, c.cond, c.market == null ? "" : c.market, c.cost == null ? "" : c.cost]
       .map(function(v){ return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }).join(","));
   });
-  var url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
+  return lines.join("\n");
+}
+$("exportBtn").addEventListener("click", function(){
+  var text = backupCsv();
+  var name = "trade-floor-backup.csv";
+  var st = $("priceStatus");
+  /* A download link is unreliable on an iPhone, especially once the app is on
+     the home screen. The share sheet is the route that actually works there. */
+  try{
+    var file = new File([text], name, {type:"text/csv"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:"Trade Floor backup"}).catch(function(){});
+      return;
+    }
+  }catch(e){}
+  var url = URL.createObjectURL(new Blob([text], {type:"text/csv"}));
   var a = document.createElement("a");
-  a.href = url; a.download = "trade-floor-backup.csv";
+  a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  st.className = "status";
+  st.textContent = "Saved " + name + ". If nothing appeared, copy the list out of Check it over instead.";
 });
 $("wipeBtn").addEventListener("click", function(){
   if(!confirm("Delete every card and every logged deal? This cannot be undone.")) return;
