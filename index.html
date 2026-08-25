@@ -221,6 +221,18 @@ body.moving #moveHint{display:block}
   font-variant-numeric:tabular-nums}
 #prepSummary .n.warn{color:var(--warn)}
 #prepSummary .k{font-size:10.5px;color:var(--faint);margin-top:1px;line-height:1.3}
+.edit{border:1px solid var(--ink);border-radius:var(--r-tile);padding:13px 14px;background:var(--slot);
+  display:flex;flex-direction:column;gap:9px}
+.edit .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.edit label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);
+  font-weight:600;display:block;margin-bottom:3px}
+.edit .field{padding:8px 10px;font-size:13.5px;background:var(--sheet)}
+.edit .wide{grid-column:1/-1}
+.edit .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.edit .row2 .btn{padding:8px 14px}
+.edit .kill{margin-left:auto;border:1px solid var(--edge-2);background:var(--sheet);
+  color:var(--bad);border-radius:var(--r-ctl);padding:8px 13px;font-size:13px;font-weight:600}
+.edit .kill:hover{background:var(--bad-bg);border-color:#EFCFC3}
 #pasteBox{margin-top:11px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:11px 13px}
 #pasteBox summary{font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
 #pasteBox summary:hover{color:var(--ink)}
@@ -634,6 +646,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
         <button class="btn ghost" id="exportBtn">Send me a backup</button>
         <button class="btn ghost" id="wipeBtn">Clear everything</button>
       </div>
+      <p class="hint" style="margin-top:0;margin-bottom:10px">Tap any card to fix its price, name or condition. A scan can name a card confidently and still pick the wrong version, and the price comes along with it.</p>
       <div class="list" id="prepList" style="max-height:none"></div>
     </div>
   </div>
@@ -1094,7 +1107,7 @@ function renderCards(){
   $("prepCount").textContent = S.cards.length ? plural(S.cards.length, "card") : "";
   renderPrepSummary(placed);
   $("prepList").innerHTML = S.cards.length
-    ? sortCards(S.cards).map(function(c){ return cardRowHtml(c, false, false); }).join("")
+    ? sortCards(S.cards).map(function(c){ return c.id === editingId ? editHtml(c) : cardRowHtml(c, false, false); }).join("")
     : '<p class="empty">Nothing imported yet.</p>';
 }
 
@@ -1117,6 +1130,40 @@ function renderPrepSummary(placed){
 
 /* Deleting a card has to clear it out of any display too, and without leaving
    a sold marker behind: a bad scan was never sold, it just should not exist. */
+var editingId = null;
+function editHtml(c){
+  return '<div class="edit" data-editor="' + c.id + '">' +
+    '<div class="grid">' +
+      '<div class="wide"><label for="eName">Card</label>' +
+        '<input class="field" id="eName" value="' + esc(c.name) + '"></div>' +
+      '<div><label for="eSet">Set</label><input class="field" id="eSet" value="' + esc(c.set || "") + '"></div>' +
+      '<div><label for="eNum">Number</label><input class="field" id="eNum" value="' + esc(c.num || "") + '"></div>' +
+      '<div><label for="eCond">Condition</label><input class="field" id="eCond" value="' + esc(c.cond || "") + '"></div>' +
+      '<div><label for="eMkt">Market value</label>' +
+        '<input class="field tnum" id="eMkt" inputmode="decimal" value="' + (c.market == null ? "" : c.market) + '"></div>' +
+      '<div><label for="eCost">What it cost you</label>' +
+        '<input class="field tnum" id="eCost" inputmode="decimal" value="' + (c.cost == null ? "" : c.cost) + '"></div>' +
+    '</div>' +
+    '<div class="row2">' +
+      '<button class="btn" id="eSave">Save</button>' +
+      '<button class="btn ghost" id="eCancel">Cancel</button>' +
+      '<button class="kill" id="eKill">Remove for good</button>' +
+    '</div>' +
+  '</div>';
+}
+function saveEdit(){
+  var c = cardById(editingId); if(!c) return;
+  var nm = $("eName").value.trim();
+  if(!nm){ $("eName").focus(); return; }
+  c.name = nm;
+  c.set  = $("eSet").value.trim();
+  c.num  = $("eNum").value.trim();
+  c.cond = $("eCond").value.trim();
+  c.market = parseMoney($("eMkt").value);
+  c.cost   = parseMoney($("eCost").value);
+  editingId = null;
+  save(); render();
+}
 function deleteCard(id){
   var c = cardById(id);
   if(!c) return;
@@ -1627,9 +1674,23 @@ $("caseTabs").addEventListener("click", function(e){
     S.curDisp = S.displays.length - 1; save(); render();
   }
 });
+/* Prep is where the list gets checked over, so that is where a wrong price
+   gets fixed. A scan can name a card confidently and still be the wrong
+   variant, and the number that comes with it is then wrong too. */
 $("prepList").addEventListener("click", function(e){
+  if(e.target.closest("#eSave")){ saveEdit(); return; }
+  if(e.target.closest("#eCancel")){ editingId = null; render(); return; }
+  if(e.target.closest("#eKill")){ var k = editingId; editingId = null; deleteCard(k); return; }
+  if(e.target.closest(".edit")) return;              /* clicks inside the fields */
   var del = e.target.closest("[data-del]");
-  if(del) deleteCard(parseInt(del.dataset.del, 10));
+  if(del){ deleteCard(parseInt(del.dataset.del, 10)); return; }
+  var row = e.target.closest(".row");
+  if(row){ editingId = parseInt(row.dataset.id, 10); render();
+    var f = $("eMkt"); if(f){ f.focus(); f.select(); } }
+});
+$("prepList").addEventListener("keydown", function(e){
+  if(e.key === "Enter" && e.target.closest(".edit")){ e.preventDefault(); saveEdit(); }
+  if(e.key === "Escape" && e.target.closest(".edit")){ editingId = null; render(); }
 });
 $("sorts").addEventListener("click", function(e){
   var b = e.target.closest("[data-sort]"); if(!b) return;
