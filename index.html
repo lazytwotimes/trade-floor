@@ -641,6 +641,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <h2>3 &middot; Check it over <span class="cnt" id="prepCount"></span></h2>
       <div id="prepSummary"></div>
       <div class="btnrow" style="margin-top:0;margin-bottom:12px">
+        <button class="btn ghost" id="roundBtn">Round prices up</button>
         <button class="btn ghost" id="ownedBtn">Mark all as already owned</button>
         <button class="btn ghost" id="printBtn">Print the price list</button>
         <button class="btn ghost" id="exportBtn">Send me a backup</button>
@@ -1847,6 +1848,32 @@ $("pasteBtn").addEventListener("click", function(){
 });
 $("priceBtn").addEventListener("click", function(){ priceCards(false); });
 $("priceAllBtn").addEventListener("click", function(){ priceCards(true); });
+/* Nobody at a table sells a card for $3.16. Whole dollars are faster to say,
+   faster to add up, and mean no coins in the cash box. Always up, never down,
+   so rounding can only ever work in his favour. */
+$("roundBtn").addEventListener("click", function(){
+  var st = $("priceStatus");
+  var todo = S.cards.filter(function(c){
+    if(c.market == null || c.market === "") return false;
+    var v = Number(c.market);
+    return isFinite(v) && v !== Math.ceil(v);
+  });
+  if(!todo.length){
+    st.className = "status";
+    st.textContent = "Every price is already a whole dollar.";
+    return;
+  }
+  var before = 0, after = 0;
+  todo.forEach(function(c){ before += Number(c.market); after += Math.ceil(Number(c.market)); });
+  if(!confirm("Round " + plural(todo.length, "price") + " up to the next whole dollar?\n\n" +
+              "Those cards add up to " + money(before) + " now, and " + money(after) + " after.")) return;
+  todo.forEach(function(c){ c.market = Math.ceil(Number(c.market)); });
+  save(); render();
+  st.className = "status ok";
+  st.textContent = "Rounded " + plural(todo.length, "price") + " up. Those cards went from " +
+    money(before) + " to " + money(after) + ", a difference of " + money(after - before) + ".";
+});
+
 /* A collection built years ago cost nothing to acquire now, so every sale off
    it is profit. Without this the app treats a blank cost as unknown and refuses
    to show profit at all, which hides the number he most wants to see. Anything
