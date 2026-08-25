@@ -205,6 +205,11 @@ body.moving #moveHint{display:block}
   border-style:dashed;border-color:var(--edge-2);background:transparent;
   justify-content:center;align-items:center;color:var(--faint);font-size:9px;text-align:center;
 }
+#pasteBox{margin-top:11px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:11px 13px}
+#pasteBox summary{font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
+#pasteBox summary:hover{color:var(--ink)}
+#pasteBox[open] summary{margin-bottom:4px}
+#pasteArea{width:100%;font-size:13px;line-height:1.45}
 .binderdrop{border:1px dashed var(--edge-2);border-radius:var(--r-tile);padding:8px;text-align:center;
   font-size:11.5px;color:var(--faint);margin-top:9px}
 .binderdrop.over{border-color:var(--ink);background:var(--slot);color:var(--ink)}
@@ -562,9 +567,15 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <div class="drop" id="drop">
         <b>Drop your Deck Tradr export here</b>
         A .csv file. Or click to choose one.
-        <input type="file" id="file" accept=".csv,text/csv,text/comma-separated-values,application/csv,text/plain" hidden>
+        <input type="file" id="file"  hidden>
       </div>
       <div class="status" id="impStatus"></div>
+      <details id="pasteBox">
+        <summary>Or paste the text instead</summary>
+        <p class="hint" style="margin-top:6px">Open the file, select all, copy, then paste it here. Useful when the file picker will not show your export.</p>
+        <textarea id="pasteArea" class="field" rows="5" placeholder="Paste the whole spreadsheet, including its header row" style="font-family:var(--body);resize:vertical"></textarea>
+        <div class="btnrow"><button class="btn" id="pasteBtn">Bring these in</button></div>
+      </details>
       <p class="hint">It reads any spreadsheet with a name column. Price, market, cost and quantity columns are picked up automatically when they exist, whatever they happen to be called.</p>
     </div>
 
@@ -1214,7 +1225,12 @@ function render(){ renderCase(); renderCards(); renderTrade(); renderSell(); ren
 /* ============================ CSV import ============================ */
 function parseCsv(text){
   var rows = [], row = [], cur = "", q = false, i, ch;
-  text = text.replace(/^﻿/, "");
+  text = text.replace(/^\ufeff/, "");
+  /* Copying straight out of a spreadsheet gives tabs, not commas. Same shape,
+     so it is treated the same rather than rejected. */
+  var sep = ",";
+  var head = text.split(/\r?\n/)[0] || "";
+  if(head.indexOf("\t") > -1 && head.split("\t").length > head.split(",").length) sep = "\t";
   for(i = 0; i < text.length; i++){
     ch = text[i];
     if(q){
@@ -1222,7 +1238,7 @@ function parseCsv(text){
       else cur += ch;
     }else{
       if(ch === '"') q = true;
-      else if(ch === ","){ row.push(cur); cur = ""; }
+      else if(ch === sep){ row.push(cur); cur = ""; }
       else if(ch === "\n"){ row.push(cur); rows.push(row); row = []; cur = ""; }
       else if(ch !== "\r") cur += ch;
     }
@@ -1619,6 +1635,12 @@ function readFile(f){
 }
 $("apiKey").value = S.apiKey;
 $("apiKey").addEventListener("input", function(){ S.apiKey = this.value.trim(); save(); });
+$("pasteBtn").addEventListener("click", function(){
+  var txt = $("pasteArea").value.trim();
+  if(!txt){ $("pasteArea").focus(); return; }
+  importCsv(txt);
+  $("pasteArea").value = "";
+});
 $("priceBtn").addEventListener("click", function(){ priceCards(false); });
 $("priceAllBtn").addEventListener("click", function(){ priceCards(true); });
 $("printBtn").addEventListener("click", function(){ buildPrintSheet(); window.print(); });
