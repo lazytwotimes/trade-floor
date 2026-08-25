@@ -200,6 +200,28 @@ body.moving .cslot.tail,body.moving .binderdrop{border-color:var(--ink);color:va
 #moveHint{display:none;font-size:12.5px;color:var(--ink);background:var(--slot);
   border:1px solid var(--edge2);border-radius:var(--r-chip);padding:8px 11px;margin-bottom:10px}
 body.moving #moveHint{display:block}
+/* a picture fills the tile, with the price sitting on a band across the foot */
+.cslot.haspic{padding:0;overflow:hidden;background:var(--slot-2)}
+.cslot.haspic img{width:100%;height:100%;object-fit:cover;display:block}
+.cslot.haspic .nm{display:none}
+.cslot.haspic .pr{
+  position:absolute;left:0;right:0;bottom:0;padding:3px 5px;
+  background:rgba(20,26,34,.86);color:#fff;font-size:12px;text-align:center;
+}
+.row .thumb{
+  grid-column:0;width:30px;aspect-ratio:5/7;border-radius:4px;object-fit:cover;
+  border:1px solid var(--edge);background:var(--slot);
+}
+.row.haspic{grid-template-columns:30px 1fr auto auto}
+.row.haspic .nm{grid-column:2}
+.row.haspic .mt{grid-column:2}
+.row.haspic .thumb{grid-column:1;grid-row:1/3;align-self:center}
+.row.haspic .pr{grid-column:3}
+.row.haspic .del{grid-column:4}
+#cuPic{max-width:min(40vw,300px);border-radius:10px;display:none;
+  box-shadow:0 10px 34px -12px rgba(20,26,34,.4)}
+#cust.haspic{flex-direction:row;gap:5vw;flex-wrap:wrap}
+#cust.haspic #cuPic{display:block}
 .cslot .nm{font-size:9px;line-height:1.22;font-weight:500;overflow:hidden}
 .cslot .pr{font-family:var(--disp);font-weight:700;font-size:13px}
 .cslot.gap{
@@ -628,6 +650,12 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
     <div class="panel">
       <h2>2 &middot; Fill in the prices</h2>
       <p style="font-size:13.5px;color:var(--soft);line-height:1.6">Looks up every card with no price yet and fills in its market value. Needs internet, so do this at home, not at the show.</p>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn ghost" id="imgBtn">Get card pictures</button>
+        <button class="btn ghost" id="imgClearBtn">Delete the pictures</button>
+      </div>
+      <div class="status" id="imgStatus"></div>
+      <p class="hint">Each picture is shrunk before it is saved, so all of them together take a few megabytes rather than twenty five. Once fetched they show with no signal.</p>
       <input class="field" id="apiKey" placeholder="Free API key, optional but worth it" autocomplete="off" aria-label="Pokemon TCG API key" style="margin-top:10px">
       <div class="btnrow">
         <button class="btn" id="priceBtn">Price the unpriced</button>
@@ -686,10 +714,11 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 <!-- =================== CUSTOMER VIEW =================== -->
 <div id="cust" role="dialog" aria-modal="true" aria-label="Buyer view">
   <span class="exit">Press Esc or C to go back</span>
-  <div class="cname" id="cuName"></div>
+  <img id="cuPic" alt="">
+  <div><div class="cname" id="cuName"></div>
   <div class="cnum tnum" id="cuNum"></div>
   <div class="cmsg" id="cuMsg"></div>
-  <div class="cbar" id="cuBarWrap"><i id="cuBar"></i></div>
+  <div class="cbar" id="cuBarWrap"><i id="cuBar"></i></div></div>
 </div>
 
 <script>
@@ -712,10 +741,11 @@ var Store = (function(){
     dbp = new Promise(function(res, rej){
       if(!self.indexedDB){ rej(new Error("no indexedDB")); return; }
       var r;
-      try{ r = indexedDB.open("tradefloor", 1); }
+      try{ r = indexedDB.open("tradefloor", 2); }
       catch(e){ rej(e); return; }
       r.onupgradeneeded = function(){
-        if(!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv");
+        if(!r.result.objectStoreNames.contains("kv"))  r.result.createObjectStore("kv");
+        if(!r.result.objectStoreNames.contains("img")) r.result.createObjectStore("img");
       };
       r.onsuccess = function(){ res(r.result); };
       r.onerror   = function(){ rej(r.error || new Error("open failed")); };
@@ -723,8 +753,9 @@ var Store = (function(){
     });
     return dbp;
   }
-  function store(mode){
-    return db().then(function(d){ return d.transaction("kv", mode).objectStore("kv"); });
+  function store(mode, name){
+    name = name || "kv";
+    return db().then(function(d){ return d.transaction(name, mode).objectStore(name); });
   }
   function wrap(req){
     return new Promise(function(res, rej){
@@ -735,6 +766,16 @@ var Store = (function(){
   return {
     get: function(k){ return store("readonly").then(function(st){ return wrap(st.get(k)); }); },
     put: function(k, v){ return store("readwrite").then(function(st){ return wrap(st.put(v, k)); }); },
+    getImg:  function(k){ return store("readonly", "img").then(function(st){ return wrap(st.get(k)); }); },
+    putImg:  function(k, v){ return store("readwrite", "img").then(function(st){ return wrap(st.put(v, k)); }); },
+    delImg:  function(k){ return store("readwrite", "img").then(function(st){ return wrap(st["delete"](k)); }); },
+    allImgs: function(){
+      return store("readonly", "img").then(function(st){
+        return Promise.all([wrap(st.getAllKeys()), wrap(st.getAll())]).then(function(r){
+          var out = {}; r[0].forEach(function(k, i){ out[k] = r[1][i]; }); return out;
+        });
+      });
+    },
     healthy: function(){
       var self_ = this;
       return self_.put("__probe", 1)
@@ -918,8 +959,10 @@ function slotHtmlCase(entry, di, ri, i, selIds){
   var c = cardById(entry);
   if(!c) return '<div class="cslot tail" ' + pos + ' data-kind="gap">missing</div>';
   var held = carried && carried.from === "case" && carried.pos.d === di && carried.pos.r === ri && carried.pos.i === i;
-  return '<span class="cslot' + (held ? " carried" : "") + '" draggable="true" role="button" tabindex="0" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
+  var pic = imgUrl[c.id];
+  return '<span class="cslot' + (held ? " carried" : "") + (pic ? " haspic" : "") + '" draggable="true" role="button" tabindex="0" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
     ' aria-pressed="' + (selIds[c.id] ? "true" : "false") + '" title="' + esc(c.name) + '">' +
+    (pic ? '<img src="' + pic + '" alt="' + esc(c.name) + '">' : "") +
     '<span class="nm">' + esc(c.name) + '</span>' +
     '<span class="pr tnum">' + money(c.market) + '</span>' +
     '<button class="del" data-outof="' + di + '-' + ri + '-' + i + '" title="Take out of the case" aria-label="Take ' + esc(c.name) + ' out of the case">&times;</button>' +
@@ -1068,8 +1111,10 @@ function cardRowHtml(c, pressed, drag){
   var held = carried && carried.from === "binder" && carried.id === c.id;
   var paid = c.cost != null && c.cost !== ""
     ? '<small>' + (Number(c.cost) === 0 ? "already owned" : "paid " + money(Number(c.cost))) + '</small>' : "";
-  return '<div class="row' + (held ? " carried" : "") + '"' + (drag ? ' draggable="true"' : "") +
+  var pic = imgUrl[c.id];
+  return '<div class="row' + (held ? " carried" : "") + (pic ? " haspic" : "") + '"' + (drag ? ' draggable="true"' : "") +
     ' role="button" tabindex="0" data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
+    (pic ? '<img class="thumb" src="' + pic + '" alt="">' : "") +
     '<span class="nm">' + esc(c.name) + '</span>' +
     '<span class="pr tnum">' + money(c.market) + paid + '</span>' +
     (meta ? '<span class="mt">' + esc(meta) + '</span>' : "") +
@@ -1175,6 +1220,8 @@ function deleteCard(id){
     });
   });
   S.cards = S.cards.filter(function(x){ return x.id !== id; });
+  if(imgUrl[id]){ URL.revokeObjectURL(imgUrl[id]); delete imgUrl[id]; }
+  Store.delImg(id)["catch"](function(){});
   deal.mine = deal.mine.filter(function(x){ return x.id !== id; });
   if(deal.sellId === id){ deal.sellId = null; deal.sellOffer = null; $("seOffer").value = ""; }
   if(carried && carried.from === "binder" && carried.id === id) carried = null;
@@ -1352,6 +1399,12 @@ window.addEventListener("beforeprint", buildPrintSheet);
 function renderCust(){
   var n = $("cuName"), num = $("cuNum"), msg = $("cuMsg"), wrap = $("cuBarWrap");
   wrap.style.display = "none";
+  /* one card on the table gets its picture shown, which is what the buyer is
+     actually looking at */
+  var showFor = deal.tab === "sell" ? deal.sellId : (deal.mine.length === 1 ? deal.mine[0].id : null);
+  var pic = showFor ? imgUrl[showFor] : null;
+  $("cust").classList.toggle("haspic", !!pic);
+  if(pic) $("cuPic").src = pic;
   if(deal.tab === "trade"){
     var t = tradeNums();
     n.textContent = deal.mine.length ? deal.mine.map(function(c){ return c.name; }).join(" + ") : "Trade";
@@ -1473,6 +1526,80 @@ function importCsv(text){
     ". Matched columns: " + Object.keys(map).join(", ") + ".";
 }
 
+/* ============================ card pictures ============================ */
+/* Pictures are fetched once at home, shrunk to the size they are actually
+   drawn at, and kept on the device. A full size card is 200 KB and there is no
+   signal at the show, so storing the original would be wrong twice over. */
+var imgUrl = {};        /* card id -> object URL, built once on load */
+var IMG_W = 330;
+
+function shrinkImage(src, maxW){
+  return new Promise(function(res, rej){
+    var im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload = function(){
+      var w = Math.min(maxW, im.width || maxW);
+      var h = Math.round((im.height || w * 1.4) * w / (im.width || w));
+      var cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(im, 0, 0, w, h);
+      if(cv.toBlob) cv.toBlob(function(bl){ bl ? res(bl) : rej(new Error("blob failed")); }, "image/jpeg", 0.82);
+      else rej(new Error("no toBlob"));
+    };
+    im.onerror = function(){ rej(new Error("image would not load")); };
+    im.src = src;
+  });
+}
+function loadStoredImages(){
+  return Store.allImgs().then(function(map){
+    Object.keys(imgUrl).forEach(function(k){ URL.revokeObjectURL(imgUrl[k]); });
+    imgUrl = {};
+    Object.keys(map).forEach(function(k){
+      if(map[k]) imgUrl[k] = URL.createObjectURL(map[k]);
+    });
+    return Object.keys(imgUrl).length;
+  }).catch(function(){ return 0; });
+}
+function fetchImages(){
+  var st = $("imgStatus");
+  var todo = S.cards.filter(function(c){ return !imgUrl[c.id]; });
+  if(!todo.length){ st.className = "status ok"; st.textContent = "Every card already has its picture."; return; }
+  if(!navigator.onLine){ st.className = "status err"; st.textContent = "No internet. Pictures have to be fetched at home."; return; }
+  var done = 0, got = 0, missed = 0, busy = 0, stop = false;
+  st.className = "status";
+  st.textContent = "Fetching " + plural(todo.length, "picture") + ". Leave this open, it takes a minute.";
+
+  function finish(){
+    save();
+    loadStoredImages().then(render);
+    st.className = got ? "status ok" : "status err";
+    var msg = "Got " + plural(got, "picture") + " of " + todo.length + ".";
+    if(missed) msg += " " + plural(missed, "card") + " could not be matched to a picture.";
+    if(busy)   msg += " " + plural(busy, "card") + " got turned away for going too fast, so run it again in a minute.";
+    st.textContent = msg;
+  }
+  function step(i){
+    if(stop || i >= todo.length){ finish(); return; }
+    var c = todo[i];
+    var have = c.img ? Promise.resolve(c.img) : lookupCard(c).then(function(hit){
+      if(hit && hit.img){ c.img = hit.img; return hit.img; }
+      return null;
+    });
+    have.then(function(url){
+      if(!url){ missed++; return null; }
+      return shrinkImage(url, IMG_W).then(function(bl){ return Store.putImg(c.id, bl).then(function(){ got++; }); });
+    }).catch(function(e){
+      if(String(e && e.message).indexOf("busy") > -1) busy++; else missed++;
+    }).then(function(){
+      done++;
+      st.textContent = "Fetched " + done + " of " + todo.length + ". Got " + got + ".";
+      if(done % 10 === 0) loadStoredImages().then(renderCards);
+      setTimeout(function(){ step(i + 1); }, S.apiKey ? 160 : 380);
+    });
+  }
+  step(0);
+}
+
 /* ============================ price lookup ============================ */
 function pickMarket(tcg){
   if(!tcg || !tcg.prices) return null;
@@ -1529,7 +1656,7 @@ function bestOf(list, card){
   }
   return list[0];
 }
-function lookupPrice(card){
+function lookupCard(card){
   var name = String(card.name).replace(/["\\]/g, "").trim();
   if(!name) return Promise.resolve(null);
   var num = cleanNum(card.num);
@@ -1540,7 +1667,8 @@ function lookupPrice(card){
     return askApiRetry('name:"' + name + '"', 3);
   }).then(function(list){
     var best = bestOf(list, card);
-    return best ? pickMarket(best.tcgplayer) : null;
+    if(!best) return null;
+    return { market: pickMarket(best.tcgplayer), img: (best.images || {}).small || null };
   });
 }
 function priceCards(all){
@@ -1562,7 +1690,9 @@ function priceCards(all){
   }
   function step(i){
     if(stop || i >= todo.length){ finish(); return; }
-    lookupPrice(todo[i]).then(function(p){
+    lookupCard(todo[i]).then(function(hit){
+      var p = hit && hit.market;
+      if(hit && hit.img && !todo[i].img) todo[i].img = hit.img;
       if(p != null){ todo[i].market = Math.round(p * 100) / 100; found++; } else missing++;
     }).catch(function(){
       busy++;
@@ -1846,6 +1976,18 @@ $("pasteBtn").addEventListener("click", function(){
   importCsv(txt);
   $("pasteArea").value = "";
 });
+$("imgBtn").addEventListener("click", fetchImages);
+$("imgClearBtn").addEventListener("click", function(){
+  if(!confirm("Delete every saved picture?\n\nThe cards stay. You can fetch the pictures again at home.")) return;
+  var ids = Object.keys(imgUrl);
+  Promise.all(ids.map(function(k){ return Store.delImg(Number(k))["catch"](function(){}); })).then(function(){
+    return loadStoredImages();
+  }).then(function(){
+    render();
+    var st = $("imgStatus"); st.className = "status";
+    st.textContent = "Deleted " + plural(ids.length, "picture") + ".";
+  });
+});
 $("priceBtn").addEventListener("click", function(){ priceCards(false); });
 $("priceAllBtn").addEventListener("click", function(){ priceCards(true); });
 /* Nobody at a table sells a card for $3.16. Whole dollars are faster to say,
@@ -1970,6 +2112,8 @@ render();
 load().then(function(){
   ensureDisplays();
   repairQuotes();
+  return loadStoredImages();
+}).then(function(){
   render();
   return Store.healthy();
 }).then(function(ok){
