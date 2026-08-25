@@ -1042,6 +1042,7 @@ function readPos(el){
   return { d: parseInt(el.dataset.d, 10), r: parseInt(el.dataset.r, 10), i: parseInt(el.dataset.i, 10) };
 }
 document.addEventListener("dragstart", function(e){
+  if(!e.target || !e.target.closest) return;
   var t = e.target.closest('[draggable="true"]');
   if(!t) return;
   if(t.classList.contains("cslot")){
@@ -1054,13 +1055,13 @@ document.addEventListener("dragstart", function(e){
   e.dataTransfer.effectAllowed = "move";
 });
 document.addEventListener("dragend", function(e){
-  var t = e.target.closest(".dragging");
+  var t = e.target && e.target.closest ? e.target.closest(".dragging") : null;
   if(t) t.classList.remove("dragging");
   dragSrc = null;
   document.querySelectorAll(".over,.drop").forEach(function(x){ x.classList.remove("over", "drop"); });
 });
 document.addEventListener("dragover", function(e){
-  if(!dragSrc) return;
+  if(!dragSrc || !e.target || !e.target.closest) return;
   var slot = e.target.closest(".cslot"), row = e.target.closest(".caserow"), bin = e.target.closest("#binderDrop");
   if(!slot && !row && !bin) return;
   e.preventDefault();
@@ -1071,7 +1072,7 @@ document.addEventListener("dragover", function(e){
   else row.classList.add("over");
 });
 document.addEventListener("drop", function(e){
-  if(!dragSrc) return;
+  if(!dragSrc || !e.target || !e.target.closest) return;
   var bin = e.target.closest("#binderDrop");
   var slot = e.target.closest(".cslot");
   var row = e.target.closest(".caserow");
@@ -1530,11 +1531,21 @@ function importCsv(text){
 /* Pictures are fetched once at home, shrunk to the size they are actually
    drawn at, and kept on the device. A full size card is 200 KB and there is no
    signal at the show, so storing the original would be wrong twice over. */
+/* Nothing here is allowed to wait forever. A stalled request that neither
+   succeeds nor fails would freeze the whole run with no way to tell why. */
+function withTimeout(p, ms, label){
+  return new Promise(function(res, rej){
+    var done = false;
+    var t = setTimeout(function(){ if(!done){ done = true; rej(new Error(label || "timed out")); } }, ms);
+    p.then(function(v){ if(!done){ done = true; clearTimeout(t); res(v); } },
+           function(e){ if(!done){ done = true; clearTimeout(t); rej(e); } });
+  });
+}
 var imgUrl = {};        /* card id -> object URL, built once on load */
 var IMG_W = 330;
 
 function shrinkImage(src, maxW){
-  return new Promise(function(res, rej){
+  return withTimeout(new Promise(function(res, rej){
     var im = new Image();
     im.crossOrigin = "anonymous";
     im.onload = function(){
@@ -1548,7 +1559,7 @@ function shrinkImage(src, maxW){
     };
     im.onerror = function(){ rej(new Error("image would not load")); };
     im.src = src;
-  });
+  }), 20000, "picture took too long");
 }
 function loadStoredImages(){
   return Store.allImgs().then(function(map){
@@ -1589,7 +1600,10 @@ function fetchImages(){
       if(!url){ missed++; return null; }
       return shrinkImage(url, IMG_W).then(function(bl){ return Store.putImg(c.id, bl).then(function(){ got++; }); });
     }).catch(function(e){
-      if(String(e && e.message).indexOf("busy") > -1) busy++; else missed++;
+      var m = String((e && e.message) || e);
+      /* a refused or timed out request reads as a network error in the browser,
+         which is the service throttling us, not a card without a picture */
+      if(/busy|too long|Failed to fetch|NetworkError|load failed/i.test(m)) busy++; else missed++;
     }).then(function(){
       done++;
       st.textContent = "Fetched " + done + " of " + todo.length + ". Got " + got + ".";
@@ -1622,14 +1636,14 @@ function cleanNum(n){
 }
 function askApi(q){
   var url = "https://api.pokemontcg.io/v2/cards?pageSize=12&q=" + encodeURIComponent(q);
-  var opts = S.apiKey ? { headers: { "X-Api-Key": S.apiKey } } : undefined;
-  return fetch(url, opts).then(function(r){
+  var opts = S.apiKey ? { headers: { "X-Api-Key": S.apiKey } } : {};
+  return withTimeout(fetch(url, opts).then(function(r){
     /* The service answers a burst with 500 or 429 rather than a clear message,
        so anything that is not a clean 200 is treated as "slow down and retry". */
     if(r.status === 429 || r.status >= 500) throw new Error("busy");
     if(!r.ok) return [];
     return r.json().then(function(d){ return (d && d.data) || []; });
-  });
+  }), 15000, "busy");
 }
 function askApiRetry(q, tries){
   return askApi(q).catch(function(e){
