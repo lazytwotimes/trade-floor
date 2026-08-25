@@ -186,6 +186,12 @@ header{
 .cslot:hover{border-color:var(--ink);transform:translateY(-2px);box-shadow:0 4px 12px -4px rgba(20,26,34,.18)}
 .cslot[aria-pressed="true"]{border-color:var(--ink);border-width:2px;background:var(--slot)}
 .cslot.dragging{opacity:.4}
+.cslot.carried,.row.carried{outline:2px solid var(--ink);outline-offset:2px}
+body.moving .cslot,body.moving .row{cursor:copy}
+body.moving .cslot.tail,body.moving .binderdrop{border-color:var(--ink);color:var(--ink)}
+#moveHint{display:none;font-size:12.5px;color:var(--ink);background:var(--slot);
+  border:1px solid var(--edge2);border-radius:var(--r-chip);padding:8px 11px;margin-bottom:10px}
+body.moving #moveHint{display:block}
 .cslot .nm{font-size:9px;line-height:1.22;font-weight:500;overflow:hidden}
 .cslot .pr{font-family:var(--disp);font-weight:700;font-size:13px}
 .cslot.gap{
@@ -412,22 +418,28 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 
   <div>
     <div class="panel">
-      <h2>The case <span class="cnt" id="caseCnt"></span></h2>
+      <h2>The case
+        <span style="display:flex;align-items:center;gap:9px">
+          <button class="tool" id="moveBtn" aria-pressed="false" style="padding:5px 11px;font-size:12.5px">Rearrange</button>
+          <span class="cnt" id="caseCnt"></span>
+        </span>
+      </h2>
       <div class="caseHead" id="caseTabs"></div>
+      <div id="moveHint"></div>
       <div id="caseRows"></div>
       <div class="btnrow" style="margin-top:4px">
         <button class="btn ghost" id="addRowBtn">Add a row</button>
         <button class="btn ghost" id="renameCaseBtn">Rename</button>
         <button class="btn ghost" id="delCaseBtn">Remove this display</button>
       </div>
-      <p class="hint">Drag a card anywhere, into another row or another display. A card that sells leaves an amber hole so you can see what to pull from the binder.</p>
+      <p class="hint">Drag a card anywhere, into another row or another display. On a phone, tap <b>Rearrange</b> first, then tap a card and tap where it goes. A card that sells leaves an amber hole so you can see what to pull from the binder.</p>
     </div>
 
     <div class="panel" style="margin-top:16px">
       <h2>The binder <span class="cnt" id="cardCount"></span></h2>
       <input class="field" id="search" type="search" placeholder="Search the binder" autocomplete="off" aria-label="Search the binder">
       <div class="list" id="cardList"></div>
-      <div class="binderdrop" id="binderDrop">Drag a card here to pull it out of the case</div>
+      <div class="binderdrop" id="binderDrop">Drag a card here, or tap here while rearranging, to pull it out of the case</div>
       <div class="addrow">
         <input class="field" id="aName" placeholder="Card name" autocomplete="off" aria-label="Card name">
         <input class="field tnum" id="aMkt" placeholder="Market" inputmode="decimal" autocomplete="off" aria-label="Market value">
@@ -826,7 +838,8 @@ function slotHtmlCase(entry, di, ri, i, selIds){
   }
   var c = cardById(entry);
   if(!c) return '<div class="cslot tail" ' + pos + ' data-kind="gap">missing</div>';
-  return '<button class="cslot" draggable="true" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
+  var held = carried && carried.from === "case" && carried.pos.d === di && carried.pos.r === ri && carried.pos.i === i;
+  return '<button class="cslot' + (held ? " carried" : "") + '" draggable="true" ' + pos + ' data-kind="card" data-id="' + c.id + '"' +
     ' aria-pressed="' + (selIds[c.id] ? "true" : "false") + '" title="' + esc(c.name) + '">' +
     '<span class="nm">' + esc(c.name) + '</span>' +
     '<span class="pr tnum">' + money(c.market) + '</span></button>';
@@ -857,6 +870,47 @@ function renderCase(){
     ? plural(cards, "card") + (gaps ? ", " + gaps + " to refill" : "")
     : (gaps ? gaps + " to refill" : "empty");
 }
+
+/* ---------- tap to move ----------
+   A finger never fires a drag event, so on a phone the case would be frozen
+   without this. Rearrange turns every card into a tap to pick up and every
+   slot into a tap to drop, which is easier than dragging on a small screen
+   anyway. */
+var moveMode = false, carried = null;
+function setMove(on){
+  moveMode = on;
+  if(!on) carried = null;
+  var btn = $("moveBtn");
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.textContent = on ? "Done" : "Rearrange";
+  document.body.classList.toggle("moving", on);
+  updateMoveHint();
+  render();
+}
+function updateMoveHint(){
+  var h = $("moveHint");
+  if(!moveMode) return;
+  h.textContent = carried
+    ? "Now tap where it goes. Any slot, any row, or the binder to take it out of the case."
+    : "Tap a card to pick it up. Works the same in the case or the binder.";
+}
+function carriedEntry(){
+  if(!carried) return null;
+  if(carried.from === "binder") return carried.id;
+  return takeSlot(carried.pos.d, carried.pos.r, carried.pos.i);
+}
+function dropCarried(target, ontoGap){
+  var sp = carried.from === "case" ? carried.pos : null;
+  var entry = carriedEntry();
+  if(entry === null || entry === undefined){ carried = null; return; }
+  if(sp && sp.d === target.d && sp.r === target.r && sp.i < target.i) target.i--;
+  var trow = S.displays[target.d].rows[target.r];
+  if(ontoGap && isGap(trow[target.i])) trow.splice(target.i, 1);
+  putSlot(target.d, target.r, target.i, entry);
+  carried = null;
+  save(); updateMoveHint(); render();
+}
+$("moveBtn").addEventListener("click", function(){ setMove(!moveMode); });
 
 /* ---------- drag and drop ---------- */
 var dragSrc = null;
@@ -930,7 +984,8 @@ document.addEventListener("drop", function(e){
 /* ============================ card list ============================ */
 function cardRowHtml(c, pressed, drag){
   var meta = [c.set, c.num, c.cond].filter(Boolean).join(" · ");
-  return '<button class="row"' + (drag ? ' draggable="true"' : "") + ' data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
+  var held = carried && carried.from === "binder" && carried.id === c.id;
+  return '<button class="row' + (held ? " carried" : "") + '"' + (drag ? ' draggable="true"' : "") + ' data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
     '<span class="nm">' + esc(c.name) + '</span>' +
     '<span class="pr tnum">' + money(c.market) + (c.cost != null && c.cost !== "" ? '<small>paid ' + money(Number(c.cost)) + '</small>' : "") + '</span>' +
     (meta ? '<span class="mt">' + esc(meta) + '</span>' : "") +
@@ -1373,10 +1428,39 @@ function chooseCard(c){
 }
 $("cardList").addEventListener("click", function(e){
   var b = e.target.closest(".row"); if(!b) return;
-  var c = cardById(parseInt(b.dataset.id, 10));
+  var id = parseInt(b.dataset.id, 10);
+  if(moveMode){
+    carried = carried && carried.from === "binder" && carried.id === id
+      ? null
+      : { from: "binder", id: id };
+    updateMoveHint(); render();
+    return;
+  }
+  var c = cardById(id);
   if(c) chooseCard(c);
 });
+$("binderDrop").addEventListener("click", function(){
+  if(!moveMode || !carried) return;
+  if(carried.from === "case") takeSlot(carried.pos.d, carried.pos.r, carried.pos.i);
+  carried = null; save(); updateMoveHint(); render();
+});
 $("caseRows").addEventListener("click", function(e){
+  if(moveMode){
+    var slot = e.target.closest(".cslot");
+    if(slot){
+      var pos = readPos(slot);
+      if(carried){ dropCarried(pos, slot.dataset.kind === "gap"); }
+      else if(slot.dataset.kind === "card"){ carried = { from: "case", pos: pos }; updateMoveHint(); render(); }
+      return;
+    }
+    var rowEl = e.target.closest(".caserow");
+    if(rowEl && carried){
+      var rp = readPos(rowEl);
+      rp.i = (S.displays[rp.d].rows[rp.r] || []).length;
+      dropCarried(rp, false);
+      return;
+    }
+  }
   var t = e.target.closest('.cslot[data-kind="card"]');
   if(t){ var c = cardById(parseInt(t.dataset.id, 10)); if(c) chooseCard(c); return; }
   var del = e.target.closest("[data-delrow]");
