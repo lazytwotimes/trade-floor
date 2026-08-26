@@ -260,8 +260,8 @@ body.moving #moveHint{display:block}
 .edit .kill{margin-left:auto;border:1px solid var(--edge-2);background:var(--sheet);
   color:var(--bad);border-radius:var(--r-ctl);padding:8px 13px;font-size:13px;font-weight:600}
 .edit .kill:hover{background:var(--bad-bg);border-color:#EFCFC3}
-#thResults{display:flex;flex-direction:column;gap:5px;margin-top:8px}
-#thResults:empty{display:none}
+.hits{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.hits:empty{display:none}
 .hit{
   display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
   border:1px solid var(--edge);border-radius:var(--r-tile);padding:8px 10px;
@@ -276,9 +276,21 @@ body.moving #moveHint{display:block}
 .hit .pr small{display:block;font-family:var(--body);font-weight:400;font-size:10px;color:var(--faint);text-align:right}
 .searchnote{font-size:12.5px;color:var(--soft);padding:8px 2px}
 .searchnote.warn{color:var(--warn)}
-#thManual{margin-top:9px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:9px 11px}
-#thManual summary{font-size:12.5px;font-weight:600;color:var(--soft);cursor:pointer}
-#thManual summary:hover{color:var(--ink)}
+.manual{margin-top:9px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:9px 11px}
+.manual summary{font-size:12.5px;font-weight:600;color:var(--soft);cursor:pointer}
+.manual summary:hover{color:var(--ink)}
+/* the card the Buy tab is currently working on, shown so the number on screen
+   is always attached to a card you can see rather than a figure you typed */
+.pick{display:none;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
+  width:100%;text-align:left;margin-top:8px;padding:8px 10px;
+  border:1px solid var(--edge);border-radius:var(--r-tile);background:var(--slot);
+  transition:border-color .16s var(--ease)}
+.pick.on{display:grid}
+.pick:hover{border-color:var(--bad)}
+.pick img{width:34px;aspect-ratio:5/7;object-fit:cover;border-radius:4px;background:var(--sheet);border:1px solid var(--edge)}
+.pick .nm{font-size:13px;font-weight:600;line-height:1.25}
+.pick .mt{display:block;font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick .x{font-size:11px;color:var(--faint);white-space:nowrap;align-self:center}
 #pasteBox{margin-top:11px;border:1px solid var(--edge);border-radius:var(--r-tile);padding:11px 13px}
 #pasteBox summary{font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
 #pasteBox summary:hover{color:var(--ink)}
@@ -311,7 +323,8 @@ body.moving #moveHint{display:block}
   transition:opacity .18s var(--ease);
 }
 .addrow button:hover{opacity:.85}
-@media (max-width:420px){.addrow{grid-template-columns:1fr 1fr;}.addrow .field:first-child{grid-column:1/-1}}
+@media (max-width:420px){.addrow{grid-template-columns:1fr 1fr;}.addrow .field:first-child{grid-column:1/-1}
+  .addrow.pairrow .field:first-child{grid-column:auto}}
 
 /* ---------- deal tabs ---------- */
 .dealtabs{display:flex;gap:6px;margin-bottom:15px}
@@ -594,8 +607,8 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
         </div>
         <div class="slots" id="theirsSlots"></div>
         <input class="field" id="thSearch" type="search" placeholder="Search for the card they handed you" autocomplete="off" aria-label="Search for their card">
-        <div id="thResults"></div>
-        <details id="thManual">
+        <div class="hits" id="thResults"></div>
+        <details class="manual" id="thManual">
           <summary>Type it in instead</summary>
           <div class="addrow" style="grid-template-columns:1fr 90px auto;margin-top:8px">
             <input class="field" id="thName" placeholder="Their card" autocomplete="off" aria-label="Their card name">
@@ -636,11 +649,14 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
     <!-- BUY -->
     <div class="pane" id="p-buy">
       <div class="hero flat">
-        <div class="k">Their card, market value</div>
+        <div class="k" id="buK">Their card, market value</div>
         <div class="n tnum" id="buN">$0</div>
         <div class="why" id="buWhy">Type what the card books at, then what they want for it.</div>
       </div>
-      <div class="addrow" style="grid-template-columns:1fr 1fr">
+      <input class="field" id="buSearch" type="search" placeholder="Search for the card they are selling" autocomplete="off" aria-label="Search for the card they are selling">
+      <div class="hits" id="buResults"></div>
+      <button class="pick" id="buPick" type="button" aria-label="Clear the found card"></button>
+      <div class="addrow pairrow" style="grid-template-columns:1fr 1fr;margin-top:8px">
         <input class="field tnum" id="buMkt" placeholder="Market value" inputmode="decimal" autocomplete="off" aria-label="Market value of their card">
         <input class="field tnum" id="buAsk" placeholder="What they want" inputmode="decimal" autocomplete="off" aria-label="Their asking price">
       </div>
@@ -823,7 +839,7 @@ var S = {
   log: [],
   showProfit: false
 };
-var deal = { tab:"trade", mine:[], theirs:[], sellId:null, sellOffer:null, buyMkt:null, buyAsk:null };
+var deal = { tab:"trade", mine:[], theirs:[], sellId:null, sellOffer:null, buyMkt:null, buyAsk:null, buyPick:null };
 var seq = 1;
 
 function snapshot(){
@@ -1354,13 +1370,29 @@ function renderBuy(){
   var mkt = deal.buyMkt, ask = deal.buyAsk;
   var max = mkt != null ? mkt * pct(S.rates.buy) : null;
   var open = max != null ? max * 0.85 : null;
+  var found = deal.buyPick;
+  var strip = $("buPick");
+  strip.classList.toggle("on", !!found);
+  if(found){
+    var meta = [found.set, found.num ? "#" + found.num : "", found.rarity].filter(Boolean).join(" \u00b7 ");
+    /* say so when the number on screen is no longer the one the lookup gave,
+       because the whole point of the strip is that the price came from the card */
+    var edited = found.looked != null && mkt != null && Math.abs(mkt - found.looked) > 0.005;
+    if(edited) meta = (meta ? meta + " \u00b7 " : "") + "looked up at " + money(found.looked);
+    strip.innerHTML = (found.img ? '<img src="' + esc(found.img) + '" alt="">' : "<span></span>") +
+      '<span><span class="nm">' + esc(found.name) + "</span>" +
+        (meta ? '<span class="mt">' + esc(meta) + "</span>" : "") + "</span>" +
+      '<span class="x">tap to clear</span>';
+    strip.setAttribute("aria-label", "Clear " + found.name);
+  }
+  $("buK").textContent = found ? found.name : "Their card, market value";
   $("buN").textContent = mkt != null ? money(mkt) : "$0";
   $("buWhy").innerHTML = max != null
     ? "Most you should pay is <b>" + money(max) + "</b>, " + S.rates.buy + "% of market. Open at <b>" + money(open) + "</b>"
-    : "Type what the card books at, then what they want for it.";
+    : "Search for their card above, or type what it books at.";
 
   var v = $("buVerdict"), cls = "verdict", vt, say;
-  if(mkt == null){ vt = "Waiting"; say = "Type a market value."; }
+  if(mkt == null){ vt = "Waiting"; say = "Search for their card, or type a market value."; }
   else if(ask == null){ vt = "Their move"; say = "Type what they are asking."; }
   else if(ask <= max){ cls += " take"; vt = "Buy it"; say = "Under your max by <b>" + money(max - ask) + "</b>. You make <b>" + money(mkt - ask) + "</b> at market"; }
   else if(ask <= max * 1.1){ cls += " close"; vt = "Close"; say = "Over your max by <b>" + money(ask - max) + "</b>. Offer <b>" + money(max) + "</b> and mean it"; }
@@ -1432,8 +1464,12 @@ function renderCust(){
   wrap.style.display = "none";
   /* one card on the table gets its picture shown, which is what the buyer is
      actually looking at */
-  var showFor = deal.tab === "sell" ? deal.sellId : (deal.mine.length === 1 ? deal.mine[0].id : null);
+  var showFor = deal.tab === "sell" ? deal.sellId
+    : (deal.tab === "trade" && deal.mine.length === 1 ? deal.mine[0].id : null);
   var pic = showFor ? imgUrl[showFor] : null;
+  /* the Buy tab's card comes from a live search, so its picture lives on the
+     card service rather than on the phone. Only worth showing with a signal. */
+  if(!pic && deal.tab === "buy" && deal.buyPick && deal.buyPick.img && navigator.onLine) pic = deal.buyPick.img;
   $("cust").classList.toggle("haspic", !!pic);
   if(pic) $("cuPic").src = pic;
   if(deal.tab === "trade"){
@@ -1450,7 +1486,7 @@ function renderCust(){
     num.textContent = c ? money(Number(c.market) || 0) : "$0";
     msg.textContent = c ? "Market value" : "Pick a card first";
   }else{
-    n.textContent = "Your card";
+    n.textContent = deal.buyPick ? deal.buyPick.name : "Your card";
     num.textContent = deal.buyMkt != null ? money(deal.buyMkt) : "$0";
     msg.textContent = deal.buyMkt != null ? "Market value" : "Nothing entered yet";
   }
@@ -1965,77 +2001,133 @@ function addCard(){
 }
 
 /* ---------------------------------------------------------------------------
-   Live search for the card someone just handed over. Until now their side of a
-   trade meant typing a value you had to already know, which is the one number
-   you are least sure of. With a signal this finds the card and brings its price
-   with it; without one the manual fields below are still there.
+   Live card search, used in the two places where the price is theirs and not
+   yours: the card they hand you in a trade, and the card they want to sell you.
+   Both used to mean typing a value you had to already know, which is the one
+   number you are least sure of. Searching finds the exact printing and brings
+   its own price with it, so the maths runs on a real figure. With no signal the
+   typed fields are still there.
+
+   One builder serves both boxes. Each keeps its own results, its own request
+   counter so a slow answer cannot overwrite a newer one, and its own typing
+   timer.
    --------------------------------------------------------------------------- */
-var findTimer = null, findSeq = 0;
-function setResults(html){ $("thResults").innerHTML = html; }
-function runFind(q){
-  var mine = ++findSeq;
-  if(!navigator.onLine){
-    setResults('<p class="searchnote warn">No connection, so searching is out. Type the card in below.</p>');
-    $("thManual").open = true;
-    return;
-  }
-  setResults('<p class="searchnote">Looking for &ldquo;' + esc(q) + '&rdquo;...</p>');
-  apiRetry("/cards?name=" + encodeURIComponent(q), 1).then(function(list){
-    if(mine !== findSeq) return;                       /* a newer search already started */
-    if(!list || !list.length){
-      setResults('<p class="searchnote">Nothing found. Try fewer words, or type it in below.</p>');
+var SEARCH_HITS = 6;
+
+function installSearch(opt){
+  var input = $(opt.input), results = $(opt.results);
+  var manual = opt.manual ? $(opt.manual) : null;
+  var timer = null, seq = 0, hits = [];
+
+  function show(html){ results.innerHTML = html; }
+  function note(txt, warn){ show('<p class="searchnote' + (warn ? " warn" : "") + '">' + txt + "</p>"); }
+  function openManual(){ if(manual) manual.open = true; }
+
+  function run(q){
+    var mine = ++seq;
+    if(!navigator.onLine){
+      note("No connection, so searching is out. " + opt.hint, true);
+      openManual();
       return;
     }
-    var top = list.slice(0, 6);
-    return Promise.all(top.map(function(c){
-      return detailFor(c.id)["catch"](function(){ return null; });
-    })).then(function(details){
-      if(mine !== findSeq) return;
-      var rows = details.map(function(d, i){
-        if(!d) return "";
-        var mkt = marketOf(d), pic = imageOf(d);
-        var setName = (d.set && d.set.name) || "";
-        var meta = [setName, d.localId ? "#" + d.localId : "", d.rarity || ""].filter(Boolean).join(" · ");
-        return '<button class="hit" data-hit="' + i + '">' +
-          (pic ? '<img src="' + esc(pic) + '" alt="">' : '<span></span>') +
-          '<span><span class="nm">' + esc(d.name) + '</span>' +
-            (meta ? '<span class="mt">' + esc(meta) + '</span>' : "") + '</span>' +
-          '<span class="pr tnum">' + (mkt == null ? "no price" : money(mkt)) +
-            (mkt == null ? '<small>type it in</small>' : "") + '</span>' +
-        '</button>';
-      }).join("");
-      window.__hits = details;
-      setResults(rows || '<p class="searchnote">Nothing usable came back. Type it in below.</p>');
+    note("Looking for &ldquo;" + esc(q) + "&rdquo;...");
+    apiRetry("/cards?name=" + encodeURIComponent(q), 1).then(function(list){
+      if(mine !== seq) return;                       /* a newer search already started */
+      if(!list || !list.length){ note("Nothing found. Try fewer words. " + opt.hint); return; }
+      var top = list.slice(0, SEARCH_HITS);
+      return Promise.all(top.map(function(c){
+        return detailFor(c.id)["catch"](function(){ return null; });
+      })).then(function(details){
+        if(mine !== seq) return;
+        hits = details;
+        var rows = details.map(function(d, i){
+          if(!d) return "";
+          var mkt = marketOf(d), pic = imageOf(d);
+          var setName = (d.set && d.set.name) || "";
+          var meta = [setName, d.localId ? "#" + d.localId : "", d.rarity || ""].filter(Boolean).join(" \u00b7 ");
+          return '<button class="hit" data-hit="' + i + '">' +
+            (pic ? '<img src="' + esc(pic) + '" alt="">' : "<span></span>") +
+            '<span><span class="nm">' + esc(d.name) + "</span>" +
+              (meta ? '<span class="mt">' + esc(meta) + "</span>" : "") + "</span>" +
+            '<span class="pr tnum">' + (mkt == null ? "no price" : money(mkt)) +
+              (mkt == null ? "<small>type it in</small>" : "") + "</span>" +
+          "</button>";
+        }).join("");
+        show(rows || '<p class="searchnote">Nothing usable came back. ' + opt.hint + "</p>");
+      });
+    })["catch"](function(){
+      if(mine !== seq) return;
+      note("The card service did not answer. " + opt.hint, true);
+      openManual();
     });
-  })["catch"](function(){
-    if(mine !== findSeq) return;
-    setResults('<p class="searchnote warn">The card service did not answer. Type it in below.</p>');
-    $("thManual").open = true;
+  }
+
+  input.addEventListener("input", function(){
+    var q = this.value.trim();
+    if(timer) clearTimeout(timer);
+    if(q.length < 2){ seq++; show(""); return; }
+    timer = setTimeout(function(){ run(q); }, 350);
   });
+  results.addEventListener("click", function(e){
+    var b = e.target.closest("[data-hit]"); if(!b) return;
+    var d = hits[parseInt(b.dataset.hit, 10)];
+    if(!d) return;
+    input.value = ""; show(""); seq++;
+    opt.onPick(d);
+  });
+
+  return { clear: function(){ input.value = ""; show(""); seq++; } };
 }
-$("thSearch").addEventListener("input", function(){
-  var q = this.value.trim();
-  if(findTimer) clearTimeout(findTimer);
-  if(q.length < 2){ findSeq++; setResults(""); return; }
-  findTimer = setTimeout(function(){ runFind(q); }, 350);
+
+/* their side of a trade */
+installSearch({
+  input: "thSearch", results: "thResults", manual: "thManual",
+  hint: "Type the card in below.",
+  onPick: function(d){
+    var mkt = marketOf(d);
+    deal.theirs.push({
+      id: null,
+      name: d.name + ((d.set && d.set.name) ? " (" + d.set.name + ")" : ""),
+      market: mkt == null ? 0 : Math.round(mkt * 100) / 100,
+      cost: null,
+      img: imageOf(d)
+    });
+    if(deal.tab !== "trade") setTab("trade");
+    renderTrade();
+    $("thSearch").focus();
+  }
 });
-$("thResults").addEventListener("click", function(e){
-  var b = e.target.closest("[data-hit]"); if(!b) return;
-  var d = (window.__hits || [])[parseInt(b.dataset.hit, 10)];
-  if(!d) return;
-  var mkt = marketOf(d);
-  deal.theirs.push({
-    id: null,
-    name: d.name + ((d.set && d.set.name) ? " (" + d.set.name + ")" : ""),
-    market: mkt == null ? 0 : Math.round(mkt * 100) / 100,
-    cost: null,
-    img: imageOf(d)
-  });
-  $("thSearch").value = ""; setResults(""); findSeq++;
-  if(deal.tab !== "trade") setTab("trade");
-  renderTrade();
-  $("thSearch").focus();
+
+/* the card they want to sell you. The found card is remembered whole, so the
+   market value is a real one and the card lands in your inventory already
+   named, set, numbered and pointed at its picture when the buy is logged. */
+var buySearch = installSearch({
+  input: "buSearch", results: "buResults",
+  hint: "Type the value in below.",
+  onPick: function(d){
+    var mkt = marketOf(d);
+    deal.buyPick = {
+      name: d.name,
+      set: (d.set && d.set.name) || "",
+      num: d.localId ? String(d.localId) : "",
+      img: imageOf(d),
+      rarity: d.rarity || "",
+      looked: mkt == null ? null : Math.round(mkt * 100) / 100
+    };
+    deal.buyMkt = mkt == null ? null : Math.round(mkt * 100) / 100;
+    $("buMkt").value = deal.buyMkt == null ? "" : deal.buyMkt.toFixed(2);
+    if(deal.tab !== "buy") setTab("buy");
+    renderBuy();
+    if($("cust").classList.contains("on")) renderCust();
+    if(deal.buyMkt == null) $("buMkt").focus(); else $("buAsk").focus();
+  }
 });
+$("buPick").addEventListener("click", clearBuyPick);
+function clearBuyPick(){
+  deal.buyPick = null;
+  renderBuy();
+  if($("cust").classList.contains("on")) renderCust();
+}
 
 $("thAdd").addEventListener("click", addTheirs);
 $("thName").addEventListener("keydown", function(e){ if(e.key === "Enter") addTheirs(); });
@@ -2064,7 +2156,11 @@ $("buAsk").addEventListener("input", function(){ deal.buyAsk = parseMoney(this.v
 
 $("trClear").addEventListener("click", function(){ deal.mine = []; deal.theirs = []; render(); });
 $("seClear").addEventListener("click", function(){ deal.sellId = null; deal.sellOffer = null; $("seOffer").value = ""; render(); });
-$("buClear").addEventListener("click", function(){ deal.buyMkt = null; deal.buyAsk = null; $("buMkt").value = ""; $("buAsk").value = ""; renderBuy(); });
+$("buClear").addEventListener("click", function(){
+  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null;
+  $("buMkt").value = ""; $("buAsk").value = ""; buySearch.clear();
+  renderBuy(); if($("cust").classList.contains("on")) renderCust();
+});
 
 $("trDone").addEventListener("click", function(){
   if(!deal.mine.length) return;
@@ -2090,10 +2186,15 @@ $("seDone").addEventListener("click", function(){
 });
 $("buDone").addEventListener("click", function(){
   if(deal.buyAsk == null) return;
-  logDeal("Bought a card", -deal.buyAsk, null);
-  S.cards.push({ id: seq++, name: "Bought card, name it later", set:"", num:"", cond:"",
-    market: deal.buyMkt, cost: deal.buyAsk });
-  deal.buyMkt = null; deal.buyAsk = null; $("buMkt").value = ""; $("buAsk").value = "";
+  var found = deal.buyPick;
+  logDeal(found ? "Bought " + found.name : "Bought a card", -deal.buyAsk, null);
+  S.cards.push({ id: seq++,
+    name: found ? found.name : "Bought card, name it later",
+    set: found ? found.set : "", num: found ? found.num : "", cond: "",
+    market: deal.buyMkt, cost: deal.buyAsk,
+    img: found ? found.img : undefined });
+  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null;
+  $("buMkt").value = ""; $("buAsk").value = ""; buySearch.clear();
   save(); render();
 });
 $("logClear").addEventListener("click", function(){
