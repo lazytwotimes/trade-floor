@@ -394,6 +394,8 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 .slot.empty .nm{color:var(--faint)}
 .sidehead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:9px}
 .sidehead h3{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.01em}
+.addhead{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.01em;
+  margin:16px 0 8px;padding-top:14px;border-top:1px solid var(--edge)}
 .sidehead .tot{font-size:12.5px;color:var(--soft)}
 .sidehead .tot b{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)}
 .side{border-top:1px solid var(--edge);padding-top:14px;margin-top:14px}
@@ -468,6 +470,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 .drop.over{border-color:var(--ink);background:var(--slot)}
 .drop b{color:var(--ink);font-weight:600;display:block;margin-bottom:4px;font-size:15px}
 .status{margin-top:11px;font-size:13px;color:var(--soft);min-height:20px}
+#bStatus:empty{display:none;margin:0;min-height:0}
 .status.err{color:var(--bad)}
 .status.ok{color:var(--good)}
 .btn{
@@ -598,12 +601,19 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       </div>
       <div class="list" id="cardList"></div>
       <div class="binderdrop" id="binderDrop">Drag a card here, or tap here while rearranging, to pull it out of the case</div>
-      <div class="addrow">
-        <input class="field" id="aName" placeholder="Card name" autocomplete="off" aria-label="Card name">
-        <input class="field tnum" id="aMkt" placeholder="Market" inputmode="decimal" autocomplete="off" aria-label="Market value">
-        <input class="field tnum" id="aCost" placeholder="Cost" inputmode="decimal" autocomplete="off" aria-label="What you paid">
-        <button id="aAdd">Add</button>
-      </div>
+      <h3 class="addhead">Add a card</h3>
+      <input class="field" id="bSearch" type="search" placeholder="Search for the card by name" autocomplete="off" aria-label="Search for a card to add to the binder">
+      <div class="hits" id="bResults"></div>
+      <div class="status" id="bStatus"></div>
+      <details class="manual" id="bManual">
+        <summary>Type it in instead</summary>
+        <div class="addrow">
+          <input class="field" id="aName" placeholder="Card name" autocomplete="off" aria-label="Card name">
+          <input class="field tnum" id="aMkt" placeholder="Market" inputmode="decimal" autocomplete="off" aria-label="Market value">
+          <input class="field tnum" id="aCost" placeholder="Cost" inputmode="decimal" autocomplete="off" aria-label="What you paid">
+          <button id="aAdd">Add</button>
+        </div>
+      </details>
       <p class="hint"><kbd>/</kbd> search &middot; <kbd>C</kbd> buyer view &middot; <kbd>P</kbd> profit</p>
     </div>
 
@@ -2299,6 +2309,34 @@ document.addEventListener("click", function(e){
   render();
 });
 
+/* Adding a card by hand was the last place left that asked for a price you had
+   to already know. Searching brings the real one, and the set, number and
+   picture with it, which is what makes the card price itself correctly later. */
+var binderSearch = installSearch({
+  input: "bSearch", results: "bResults", manual: "bManual",
+  hint: "Type it in below.",
+  onPick: function(d){
+    var mkt = marketOf(d);
+    S.cards.push({
+      id: seq++,
+      name: d.name,
+      set: (d.set && d.set.name) || "",
+      num: d.localId ? String(d.localId) : "",
+      cond: "",
+      market: mkt == null ? null : Math.round(mkt * 100) / 100,
+      cost: null,
+      img: imageOf(d)
+    });
+    save(); render();
+    var st = $("bStatus");
+    st.className = "status ok";
+    st.innerHTML = esc(d.name) + " is in the binder at " +
+      (mkt == null ? "no price yet" : money(Math.round(mkt * 100) / 100)) +
+      ". <b>Nothing paid recorded</b>, so set that in Prep or mark it as already owned.";
+    $("bSearch").focus();
+  }
+});
+
 $("aAdd").addEventListener("click", addCard);
 $("aName").addEventListener("keydown", function(e){ if(e.key === "Enter") addCard(); });
 $("aMkt").addEventListener("keydown", function(e){ if(e.key === "Enter") addCard(); });
@@ -2310,6 +2348,9 @@ function addCard(){
     market: parseMoney($("aMkt").value), cost: parseMoney($("aCost").value) });
   $("aName").value = ""; $("aMkt").value = ""; $("aCost").value = "";
   save(); render(); $("aName").focus();
+  var st = $("bStatus");
+  st.className = "status";
+  st.textContent = nm + " is in the binder. It has no set or number, so it cannot price itself later.";
 }
 
 /* ---------------------------------------------------------------------------
