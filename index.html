@@ -2284,7 +2284,10 @@ document.addEventListener("click", function(e){
       if(cur === "?") cur = "nm";
       var at = 0;
       for(var k = 0; k < GRADES.length; k++){ if(GRADES[k].key === cur) at = k; }
-      card.cond = GRADES[(at + 1) % GRADES.length].name;
+      var next = GRADES[(at + 1) % GRADES.length].name;
+      deal.theirs = deal.theirs.map(function(c, n){
+        return n === ci ? Object.assign({}, c, { cond: next }) : c;
+      });
       renderTrade();
       if($("cust").classList.contains("on")) renderCust();
     }
