@@ -6,7 +6,7 @@
    never on the critical path.
 
    Bump CACHE when the app changes, or browsers will keep serving the old one. */
-var CACHE = "trade-floor-v12";
+var CACHE = "trade-floor-v13";
 var SHELL = [
   "./",
   "./index.html",
@@ -40,9 +40,10 @@ self.addEventListener("fetch", function(e){
 
   var url = new URL(req.url);
 
-  /* Price lookups are a Prep-at-home job and must never be served stale.
-     Left alone entirely, so offline it simply fails and the app says so. */
-  if(url.hostname === "api.pokemontcg.io") return;
+  /* Card lookups and card pictures are live requests. Left alone entirely, so
+     with no signal they simply fail and the app says so, rather than quietly
+     handing back yesterday's answer. */
+  if(url.hostname === "api.tcgdex.net" || url.hostname === "assets.tcgdex.net") return;
 
   /* Anything off our own origin is not ours to cache. */
   if(url.origin !== self.location.origin) return;
