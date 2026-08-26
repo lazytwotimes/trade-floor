@@ -163,6 +163,9 @@ header{
 .row .pr{grid-column:2;grid-row:1/3;align-self:center;text-align:right;
   font-family:var(--disp);font-weight:700;font-size:16px;white-space:nowrap}
 .row .pr small{display:block;font-family:var(--body);font-weight:400;font-size:10.5px;color:var(--faint)}
+/* the grade marker only appears on a card condition is actually discounting,
+   so a row without one is a card being quoted at full price */
+.row .pr small.grade{color:var(--warn);font-weight:600;letter-spacing:.04em}
 .empty{color:var(--faint);font-size:13px;padding:16px 2px;text-align:center;line-height:1.6}
 
 /* ---------- the case ---------- */
@@ -353,7 +356,31 @@ body.moving #moveHint{display:block}
 .hero.flat{background:var(--sheet)}
 
 /* ---------- slots ---------- */
-.slots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+.slots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px;align-items:start}
+/* a card someone hands you arrives ungraded, and the grade is the whole
+   argument, so it gets its own tap target rather than hiding in a menu */
+.slotwrap{display:flex;flex-direction:column;gap:3px}
+.gchip{
+  width:78px;font-family:var(--disp);font-weight:700;font-size:10px;letter-spacing:.06em;
+  padding:4px 0;border-radius:var(--r-pill,999px);border:1px solid var(--edge);
+  background:var(--sheet);color:var(--soft);cursor:pointer;
+  transition:border-color .16s var(--ease),color .16s var(--ease);
+}
+.gchip:hover{border-color:var(--ink);color:var(--ink)}
+.gchip.flat{background:transparent;border-style:dashed;cursor:default;display:block;text-align:center}
+.gchip.flat:hover{border-color:var(--edge);color:var(--soft)}
+.gchip.flat.worn:hover{border-color:var(--warn);color:var(--warn)}
+.gchip.worn{border-color:var(--warn);color:var(--warn);background:var(--warn-bg)}
+.grow{display:none;gap:5px;margin-top:8px}
+.grow.on{display:flex}
+.grow button{
+  flex:1;font-family:var(--disp);font-weight:700;font-size:10.5px;letter-spacing:.05em;
+  padding:7px 0;border-radius:var(--r-tile);border:1px solid var(--edge);
+  background:var(--sheet);color:var(--soft);cursor:pointer;
+  transition:border-color .16s var(--ease),color .16s var(--ease),background .16s var(--ease);
+}
+.grow button:hover{border-color:var(--ink);color:var(--ink)}
+.grow button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--sheet)}
 .slot{
   width:78px;aspect-ratio:5/7;border-radius:var(--r-tile);
   background:var(--slot);border:1px solid var(--edge);padding:8px;
@@ -411,6 +438,27 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 
 /* ---------- prep ---------- */
 .prepgrid{display:grid;grid-template-columns:1fr;gap:16px}
+.condrow{display:grid;grid-template-columns:1fr 74px 88px 96px;gap:10px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--edge)}
+.condrow:last-of-type{border-bottom:0}
+.condrow .g{font-size:13.5px;font-weight:600}
+.condrow .g small{display:block;font-weight:400;font-size:11.5px;color:var(--faint)}
+.condrow .ct{font-size:12.5px;color:var(--soft);text-align:right}
+.condrow .field{padding:7px 9px;font-size:13px;text-align:right}
+.condrow .val{font-family:var(--disp);font-weight:700;font-size:14px;text-align:right}
+.condrow.off .field,.condrow.off .val{opacity:.45}
+.condhead{display:grid;grid-template-columns:1fr 74px 88px 96px;gap:10px;
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
+  font-weight:600;padding-bottom:7px;border-bottom:1px solid var(--edge)}
+.condhead span:not(:first-child){text-align:right}
+.condtot{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;
+  margin-top:12px;padding-top:11px;border-top:1px solid var(--edge);font-size:13px}
+.condtot b{font-family:var(--disp);font-size:15px}
+.condwarn{margin-top:10px;font-size:12.5px;color:var(--warn)}
+@media (max-width:520px){
+  .condrow,.condhead{grid-template-columns:1fr 56px 70px 78px;gap:7px}
+  .condrow .g{font-size:12.5px}
+}
 @media (min-width:940px){.prepgrid{grid-template-columns:1fr 1fr}}
 .drop{
   border:1.5px dashed var(--edge-2);border-radius:var(--r-tile);
@@ -595,7 +643,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <div class="side">
         <div class="sidehead">
           <h3>Your side</h3>
-          <span class="tot">Market <b class="tnum" id="mineTot">$0</b></span>
+          <span class="tot"><span id="mineTotLbl">Market</span> <b class="tnum" id="mineTot">$0</b></span>
         </div>
         <div class="slots" id="mineSlots"></div>
       </div>
@@ -603,7 +651,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <div class="side">
         <div class="sidehead">
           <h3>Their side</h3>
-          <span class="tot">Market <b class="tnum" id="theirsTot">$0</b></span>
+          <span class="tot"><span id="theirsTotLbl">Market</span> <b class="tnum" id="theirsTot">$0</b></span>
         </div>
         <div class="slots" id="theirsSlots"></div>
         <input class="field" id="thSearch" type="search" placeholder="Search for the card they handed you" autocomplete="off" aria-label="Search for their card">
@@ -656,6 +704,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <input class="field" id="buSearch" type="search" placeholder="Search for the card they are selling" autocomplete="off" aria-label="Search for the card they are selling">
       <div class="hits" id="buResults"></div>
       <button class="pick" id="buPick" type="button" aria-label="Clear the found card"></button>
+      <div class="grow" id="buGrades" role="group" aria-label="What condition their card is in"></div>
       <div class="addrow pairrow" style="grid-template-columns:1fr 1fr;margin-top:8px">
         <input class="field tnum" id="buMkt" placeholder="Market value" inputmode="decimal" autocomplete="off" aria-label="Market value of their card">
         <input class="field tnum" id="buAsk" placeholder="What they want" inputmode="decimal" autocomplete="off" aria-label="Their asking price">
@@ -710,7 +759,17 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
     </div>
 
     <div class="panel" style="grid-column:1/-1">
-      <h2>3 &middot; Check it over <span class="cnt" id="prepCount"></span></h2>
+      <h2>3 &middot; Condition</h2>
+      <p style="font-size:13.5px;color:var(--soft);line-height:1.6">Your export already records what shape each card is in, and until now the app quoted every one of them at the near mint price. No price service will sell a played figure a browser can fetch for free, so this takes a percentage off per grade, the way the rest of the trade does.</p>
+      <div id="condReport"></div>
+      <div class="btnrow">
+        <button class="btn" id="condBtn">Use condition on prices</button>
+      </div>
+      <p class="hint">These start at the overlap of two published guides, which disagreed by up to fifteen points. Treat them as a starting point you argue from. Good cards hold their value better than these numbers suggest and commons hold it worse, so lean softer on your best cards.</p>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h2>4 &middot; Check it over <span class="cnt" id="prepCount"></span></h2>
       <div id="prepSummary"></div>
       <div class="btnrow" style="margin-top:0;margin-bottom:12px">
         <button class="btn ghost" id="roundBtn">Round prices up</button>
@@ -829,9 +888,64 @@ var Store = (function(){
     }
   };
 })();
+/* ---------------------------------------------------------------------------
+   Condition. Your export already records what shape every card is in and the
+   app has been ignoring it, so a beaten card has been quoted at the near mint
+   price all along. No price service sells a played figure that a browser can
+   reach for free, so the trade does what every dealer does: a percentage off
+   near mint, per grade.
+
+   The percentages below are the overlap of two published guides, which
+   disagreed by up to fifteen points. They are a starting point to argue from,
+   not a verdict, which is why they sit in the settings next to the other four.
+   --------------------------------------------------------------------------- */
+var GRADES = [
+  { key:"nm",  name:"Near mint",         short:"NM"  },
+  { key:"lp",  name:"Lightly played",    short:"LP"  },
+  { key:"mp",  name:"Moderately played", short:"MP"  },
+  { key:"hp",  name:"Heavily played",    short:"HP"  },
+  { key:"dmg", name:"Damaged",           short:"DMG" }
+];
+/* what the various spreadsheets and shops actually write in that column */
+var GRADE_WORDS = [
+  ["nm",  ["near mint","nearmint","near-mint","nm","mint","m","nm mt","nmm","pack fresh","new"]],
+  ["lp",  ["lightly played","lightplay","light play","light played","lp","slightly played","sp","excellent","exc","ex","near mint minus"]],
+  ["mp",  ["moderately played","moderate play","moderately","mp"]],
+  ["hp",  ["heavily played","heavy play","heavily","hp"]],
+  ["dmg", ["damaged","damage","dmg","dm","d","destroyed","poor"]]
+];
+/* Words like "good", "very good" and a bare "played" rank differently
+   depending on whose scale the seller was using: on the European one "good"
+   sits ABOVE lightly played, on others it sits well below. Guessing wrong
+   there moves real money, so they are deliberately left out. Anything not
+   recognised stays at full price and gets named in the Prep report, where you
+   can see it and decide yourself. */
+function readCond(text){
+  var t = String(text == null ? "" : text).toLowerCase()
+    .replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  if(!t) return null;                       /* nothing recorded, not the same as near mint */
+  for(var i = 0; i < GRADE_WORDS.length; i++){
+    if(GRADE_WORDS[i][1].indexOf(t) > -1) return GRADE_WORDS[i][0];
+  }
+  /* fall back to a word match so "Near Mint / Mint" and the like still land */
+  for(i = 0; i < GRADE_WORDS.length; i++){
+    for(var j = 0; j < GRADE_WORDS[i][1].length; j++){
+      var w = GRADE_WORDS[i][1][j];
+      if(w.length > 2 && t.indexOf(w) > -1) return GRADE_WORDS[i][0];
+    }
+  }
+  return "?";                               /* recorded, but nothing we recognise */
+}
+function gradeName(key){
+  for(var i = 0; i < GRADES.length; i++){ if(GRADES[i].key === key) return GRADES[i].name; }
+  return key === "?" ? "Not recognised" : "None recorded";
+}
+
 var S = {
   cards: [],
   rates: { floor:100, buy:50, mine:100, theirs:50 },
+  cond: { nm:100, lp:85, mp:60, hp:40, dmg:20 },   /* nm is the baseline and stays at 100 */
+  condOn: false,
   apiKey: "",
   displays: [],
   curDisp: 0,
@@ -839,11 +953,11 @@ var S = {
   log: [],
   showProfit: false
 };
-var deal = { tab:"trade", mine:[], theirs:[], sellId:null, sellOffer:null, buyMkt:null, buyAsk:null, buyPick:null };
+var deal = { tab:"trade", mine:[], theirs:[], sellId:null, sellOffer:null, buyMkt:null, buyAsk:null, buyPick:null, buyGrade:"nm" };
 var seq = 1;
 
 function snapshot(){
-  return { cards:S.cards, rates:S.rates, log:S.log, apiKey:S.apiKey, displays:S.displays, sort:S.sort };
+  return { cards:S.cards, rates:S.rates, cond:S.cond, condOn:S.condOn, log:S.log, apiKey:S.apiKey, displays:S.displays, sort:S.sort };
 }
 var saveTimer = null;
 function save(){
@@ -867,6 +981,14 @@ function applyState(d){
   if(d.rates) for(var k in S.rates){ if(typeof d.rates[k] === "number") S.rates[k] = d.rates[k]; }
   if(Array.isArray(d.log)) S.log = d.log;
   if(typeof d.apiKey === "string") S.apiKey = d.apiKey;
+  if(d.cond && typeof d.cond === "object"){
+    GRADES.forEach(function(g){
+      if(g.key === "nm") return;                 /* the baseline is not a setting */
+      var v = Number(d.cond[g.key]);
+      if(isFinite(v) && v >= 0 && v <= 100) S.cond[g.key] = v;
+    });
+  }
+  if(typeof d.condOn === "boolean") S.condOn = d.condOn;
   if(Array.isArray(d.displays)) S.displays = d.displays;
   if(typeof d.sort === "string") S.sort = d.sort;
   seq = 1;
@@ -945,7 +1067,7 @@ function cardById(id){
   return null;
 }
 function sumMarket(list){
-  return list.reduce(function(a, c){ return a + (Number(c.market) || 0); }, 0);
+  return list.reduce(function(a, c){ return a + valueOf(c); }, 0);
 }
 function sumCost(list){
   if(!list.length) return null;
@@ -1008,7 +1130,7 @@ function slotHtmlCase(entry, di, ri, i, selIds){
     ' aria-pressed="' + (selIds[c.id] ? "true" : "false") + '" title="' + esc(c.name) + '">' +
     (pic ? '<img src="' + pic + '" alt="' + esc(c.name) + '">' : "") +
     '<span class="nm">' + esc(c.name) + '</span>' +
-    '<span class="pr tnum">' + money(c.market) + '</span>' +
+    '<span class="pr tnum">' + money(valueOf(c)) + '</span>' +
     '<button class="del" data-outof="' + di + '-' + ri + '-' + i + '" title="Take out of the case" aria-label="Take ' + esc(c.name) + ' out of the case">&times;</button>' +
   '</span>';
 }
@@ -1161,7 +1283,7 @@ function cardRowHtml(c, pressed, drag){
     ' role="button" tabindex="0" data-id="' + c.id + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
     (pic ? '<img class="thumb" src="' + pic + '" alt="">' : "") +
     '<span class="nm">' + esc(c.name) + '</span>' +
-    '<span class="pr tnum">' + money(c.market) + paid + '</span>' +
+    '<span class="pr tnum">' + money(valueOf(c)) + condTag(c) + paid + '</span>' +
     (meta ? '<span class="mt">' + esc(meta) + '</span>' : "") +
     '<button class="del" data-del="' + c.id + '" title="Remove this card" aria-label="Remove ' + esc(c.name) + '">&times;</button>' +
   '</div>';
@@ -1172,8 +1294,8 @@ function sortCards(list){
   var by = S.sort;
   return list.slice().sort(function(a, b){
     if(by === "name") return String(a.name).localeCompare(String(b.name), "en", {sensitivity:"base"});
-    var av = a.market == null || a.market === "" ? -1 : Number(a.market);
-    var bv = b.market == null || b.market === "" ? -1 : Number(b.market);
+    var av = a.market == null || a.market === "" ? -1 : valueOf(a);
+    var bv = b.market == null || b.market === "" ? -1 : valueOf(b);
     if(av === bv) return String(a.name).localeCompare(String(b.name), "en", {sensitivity:"base"});
     return by === "price-asc" ? av - bv : bv - av;
   });
@@ -1197,6 +1319,7 @@ function renderCards(){
         : (S.cards.length ? "Every card is out in the case." : "No cards yet.<br>Add one below, or import your Deck Tradr file in Prep.")) + '</p>';
   $("prepCount").textContent = S.cards.length ? plural(S.cards.length, "card") : "";
   renderPrepSummary(placed);
+  renderCond();
   $("prepList").innerHTML = S.cards.length
     ? sortCards(S.cards).map(function(c){ return c.id === editingId ? editHtml(c) : cardRowHtml(c, false, false); }).join("")
     : '<p class="empty">Nothing imported yet.</p>';
@@ -1204,6 +1327,140 @@ function renderCards(){
 
 /* The import message disappears on the next reload, which left no way to tell
    what actually made it in. These counts are always there. */
+/* ---------------------------------------------------------------------------
+   What the condition column in your export actually says, and what applying it
+   would do. Read only until you switch it on, so you can see the damage first.
+   --------------------------------------------------------------------------- */
+function condPct(card){
+  if(!S.condOn) return 1;
+  var g = readCond(card && card.cond);
+  if(!g || g === "?") return 1;             /* nothing recorded, or nothing we know: leave it alone */
+  var v = Number(S.cond[g]);
+  return isFinite(v) && v >= 0 ? v / 100 : 1;
+}
+function buyGradePct(){
+  if(!S.condOn) return 1;
+  var v = Number(S.cond[deal.buyGrade]);
+  return isFinite(v) && v >= 0 ? v / 100 : 1;
+}
+function condWhy(card){
+  if(!S.condOn) return "";
+  var g = readCond(card && card.cond);
+  if(!g || g === "?" || g === "nm") return "";
+  var m = Number((card || {}).market);
+  if(!isFinite(m) || m <= 0) return "";
+  return " (" + gradeName(g).toLowerCase() + ", " + S.cond[g] + "% of " + money(m) + ")";
+}
+function condTag(card){
+  if(!S.condOn) return "";
+  var g = readCond(card && card.cond);
+  if(!g || g === "?" || g === "nm") return "";
+  for(var i = 0; i < GRADES.length; i++){
+    if(GRADES[i].key === g) return '<small class="grade">' + GRADES[i].short + '</small>';
+  }
+  return "";
+}
+function valueOf(card){
+  var m = Number((card || {}).market);
+  if(!isFinite(m)) return 0;
+  return m * condPct(card);
+}
+function condCounts(){
+  var counts = { nm:0, lp:0, mp:0, hp:0, dmg:0, "?":0, none:0 };
+  var mkt    = { nm:0, lp:0, mp:0, hp:0, dmg:0, "?":0, none:0 };
+  var odd = {};
+  S.cards.forEach(function(c){
+    var g = readCond(c.cond), k = g === null ? "none" : g;
+    counts[k]++;
+    mkt[k] += Number(c.market) || 0;
+    if(g === "?" && c.cond) odd[String(c.cond).trim()] = (odd[String(c.cond).trim()] || 0) + 1;
+  });
+  return { counts: counts, mkt: mkt, odd: odd };
+}
+/* The percentage boxes are typed into, so the skeleton is only rebuilt when the
+   cards behind it change. Rebuilding on every keystroke would take the cursor
+   out of the box mid-number. */
+var condShape = "";
+function renderCond(){
+  var r = condCounts(), total = 0, adjusted = 0;
+  S.cards.forEach(function(c){
+    var m = Number(c.market) || 0;
+    total += m;
+    var g = readCond(c.cond);
+    adjusted += (g && g !== "?") ? m * (Number(S.cond[g]) || 0) / 100 : m;
+  });
+
+  var shape = JSON.stringify(r.counts) + "|" + Object.keys(r.odd).join(",") + "|" + S.condOn;
+  if(shape === condShape){ refreshCondNumbers(r, total, adjusted); return; }
+  condShape = shape;
+
+  var rows = GRADES.map(function(g){
+    var n = r.counts[g.key];
+    return '<div class="condrow' + (S.condOn ? "" : " off") + '">' +
+      '<span class="g">' + esc(g.name) + '<small>' + g.short + '</small></span>' +
+      '<span class="ct">' + (n ? plural(n, "card") : "none") + '</span>' +
+      (g.key === "nm"
+        ? '<span class="ct">100%</span>'
+        : '<input class="field tnum" data-grade="' + g.key + '" inputmode="decimal" ' +
+          'aria-label="' + esc(g.name) + ' percentage" value="' + S.cond[g.key] + '">') +
+      '<span class="val">' + (n ? money(r.mkt[g.key] * (Number(S.cond[g.key]) || 0) / 100) : "&mdash;") + '</span>' +
+    '</div>';
+  }).join("");
+
+  var loose = r.counts["?"] + r.counts.none;
+  var looseNote = loose
+    ? '<div class="condrow' + (S.condOn ? "" : " off") + '">' +
+        '<span class="g">Left at full price<small>no grade the app could read</small></span>' +
+        '<span class="ct">' + plural(loose, "card") + '</span>' +
+        '<span class="ct">100%</span>' +
+        '<span class="val">' + money(r.mkt["?"] + r.mkt.none) + '</span>' +
+      '</div>'
+    : "";
+
+  var oddNames = Object.keys(r.odd);
+  var oddNote = oddNames.length
+    ? '<p class="condwarn">Not recognised, so left at full price: ' +
+        oddNames.slice(0, 6).map(function(k){ return "&ldquo;" + esc(k) + "&rdquo; (" + r.odd[k] + ")"; }).join(", ") +
+        (oddNames.length > 6 ? " and " + (oddNames.length - 6) + " more" : "") + "</p>"
+    : "";
+
+  var drop = total - adjusted;
+  $("condReport").innerHTML =
+    '<div class="condhead"><span>Grade</span><span>Cards</span><span>Percent</span><span>Worth</span></div>' +
+    rows + looseNote + oddNote +
+    '<div class="condtot">' +
+      '<span>At near mint prices <b class="tnum">' + money(total) + '</b></span>' +
+      '<span>With condition <b class="tnum">' + money(adjusted) + '</b></span>' +
+      '<span>' + (drop > 0.5 ? "Difference <b class=\"tnum\">" + money(drop) + "</b>" : "No difference yet") + '</span>' +
+    '</div>';
+
+  refreshCondNumbers(r, total, adjusted);
+}
+
+/* the parts that move when a percentage is typed, leaving the boxes untouched */
+function refreshCondNumbers(r, total, adjusted){
+  GRADES.forEach(function(g){
+    if(g.key === "nm") return;                   /* fixed at 100, nothing to refresh */
+    var row = $("condReport").querySelector('[data-grade="' + g.key + '"]');
+    if(!row) return;
+    var cell = row.parentNode.querySelector(".val");
+    if(cell) cell.innerHTML = r.counts[g.key]
+      ? money(r.mkt[g.key] * (Number(S.cond[g.key]) || 0) / 100) : "&mdash;";
+  });
+  var tot = $("condReport").querySelector(".condtot");
+  if(tot){
+    var drop = total - adjusted;
+    tot.innerHTML =
+      '<span>At near mint prices <b class="tnum">' + money(total) + '</b></span>' +
+      '<span>With condition <b class="tnum">' + money(adjusted) + '</b></span>' +
+      '<span>' + (drop > 0.5 ? 'Difference <b class="tnum">' + money(drop) + "</b>" : "No difference yet") + '</span>';
+  }
+  var b = $("condBtn");
+  b.textContent = S.condOn ? "Condition is on" : "Use condition on prices";
+  b.className = S.condOn ? "btn" : "btn ghost";
+  b.setAttribute("aria-pressed", S.condOn ? "true" : "false");
+}
+
 function renderPrepSummary(placed){
   var priced = 0, costed = 0, inCase = 0;
   S.cards.forEach(function(c){
@@ -1290,16 +1547,33 @@ function tradeNums(){
 }
 function slotHtml(c, i, side){
   var pic = c.img || (c.id != null ? imgUrl[c.id] : null);
-  return '<button class="slot' + (pic ? " haspic" : "") + '" data-side="' + side + '" data-i="' + i + '" title="Remove">' +
+  var tile = '<button class="slot' + (pic ? " haspic" : "") + '" data-side="' + side + '" data-i="' + i + '" title="Remove">' +
     (pic ? '<img src="' + esc(pic) + '" alt="">' : "") +
     '<span class="nm">' + esc(c.name) + '</span>' +
-    '<span class="pr tnum">' + money(c.market) + '</span>' +
+    '<span class="pr tnum">' + money(valueOf(c)) + '</span>' +
   '</button>';
+  if(!S.condOn) return tile;
+  var g = readCond(c.cond) || "nm";
+  if(g === "?") g = "nm";
+  var short = "NM";
+  for(var k = 0; k < GRADES.length; k++){ if(GRADES[k].key === g) short = GRADES[k].short; }
+  var worn = g === "nm" ? "" : " worn";
+  /* Their card arrives ungraded and its grade is the whole argument, so it is
+     a button you tap. Your own card already carries a grade from your export,
+     so it is shown but not editable mid-deal: change it in Prep instead. */
+  var mark = side === "theirs"
+    ? '<button class="gchip' + worn + '" data-gi="' + i + '" title="Tap to change the grade" ' +
+      'aria-label="Grade of ' + esc(c.name) + ', currently ' + esc(gradeName(g)) + '">' + short + '</button>'
+    : '<span class="gchip flat' + worn + '" title="' + esc(gradeName(c.cond ? g : "nm")) + '">' + short + '</span>';
+  return '<div class="slotwrap">' + tile + mark + '</div>';
 }
 function renderTrade(){
   var t = tradeNums();
   $("mineTot").textContent   = money(t.mineMkt);
   $("theirsTot").textContent = money(t.theirsMkt);
+  var totLbl = S.condOn ? "Worth" : "Market";
+  $("mineTotLbl").textContent   = totLbl;
+  $("theirsTotLbl").textContent = totLbl;
   $("mineSlots").innerHTML = deal.mine.length
     ? deal.mine.map(function(c, i){ return slotHtml(c, i, "mine"); }).join("")
     : '<div class="slot empty"><span class="nm">Tap a card</span></div>';
@@ -1341,19 +1615,20 @@ function renderTrade(){
 /* ============================ sell ============================ */
 function renderSell(){
   var c = deal.sellId ? cardById(deal.sellId) : null;
-  var floor = c ? (Number(c.market) || 0) * pct(S.rates.floor) : 0;
-  var counter = c ? floor + ((Number(c.market) || 0) - floor) / 2 : 0;
+  var worth = c ? valueOf(c) : 0;
+  var floor = worth * pct(S.rates.floor);
+  var counter = c ? floor + (worth - floor) / 2 : 0;
   $("seK").textContent = c ? c.name : "Pick a card, then type their offer";
   $("seN").textContent = c ? money(floor) : "$0";
   $("seWhy").innerHTML = c
-    ? "Your floor, " + S.rates.floor + "% of " + money(c.market) + ". Open your counter at <b>" + money(counter) + "</b>"
+    ? "Your floor, " + S.rates.floor + "% of " + money(worth) + condWhy(c) + ". Open your counter at <b>" + money(counter) + "</b>"
     : "Your floor and your counter appear here.";
 
   var v = $("seVerdict"), cls = "verdict", vt, say;
   var offer = deal.sellOffer;
   if(!c){ vt = "Waiting"; say = "Pick a card on the left."; }
   else if(offer == null){ vt = "Their move"; say = "Type what they offered."; }
-  else if(offer >= (Number(c.market) || 0)){ cls += " take"; vt = "Take it"; say = "That is at or above market. <b>Done deal.</b>"; }
+  else if(offer >= worth){ cls += " take"; vt = "Take it"; say = "That is at or above market. <b>Done deal.</b>"; }
   else if(offer >= floor){ cls += " take"; vt = "Take it"; say = "Above your floor by <b>" + money(offer - floor) + "</b>"; }
   else if(offer >= floor * 0.9){ cls += " close"; vt = "Close"; say = "Under your floor by <b>" + money(floor - offer) + "</b>. Counter at <b>" + money(counter) + "</b>"; }
   else{ cls += " walk"; vt = "Too low"; say = "Under your floor by <b>" + money(floor - offer) + "</b>. Counter at <b>" + money(counter) + "</b>"; }
@@ -1367,9 +1642,23 @@ function renderSell(){
 
 /* ============================ buy ============================ */
 function renderBuy(){
-  var mkt = deal.buyMkt, ask = deal.buyAsk;
+  var typed = deal.buyMkt, ask = deal.buyAsk;
+  /* the value the deal runs on is what the card is worth in the shape it is
+     actually in, not the near mint figure printed on the price guide */
+  var gp = buyGradePct();
+  var mkt = typed == null ? null : typed * gp;
   var max = mkt != null ? mkt * pct(S.rates.buy) : null;
   var open = max != null ? max * 0.85 : null;
+
+  var grow = $("buGrades");
+  grow.classList.toggle("on", S.condOn);
+  if(S.condOn){
+    grow.innerHTML = GRADES.map(function(g){
+      return '<button type="button" data-bg="' + g.key + '" aria-pressed="' +
+        (deal.buyGrade === g.key ? "true" : "false") + '" title="' + esc(g.name) + '">' +
+        g.short + "</button>";
+    }).join("");
+  }else if(grow.innerHTML){ grow.innerHTML = ""; }
   var found = deal.buyPick;
   var strip = $("buPick");
   strip.classList.toggle("on", !!found);
@@ -1387,8 +1676,12 @@ function renderBuy(){
   }
   $("buK").textContent = found ? found.name : "Their card, market value";
   $("buN").textContent = mkt != null ? money(mkt) : "$0";
+  var worn = S.condOn && deal.buyGrade !== "nm" && typed != null;
   $("buWhy").innerHTML = max != null
-    ? "Most you should pay is <b>" + money(max) + "</b>, " + S.rates.buy + "% of market. Open at <b>" + money(open) + "</b>"
+    ? "Most you should pay is <b>" + money(max) + "</b>, " + S.rates.buy + "% of " +
+      (worn ? money(mkt) + " (" + gradeName(deal.buyGrade).toLowerCase() + ", " +
+              S.cond[deal.buyGrade] + "% of " + money(typed) + ")" : "market") +
+      ". Open at <b>" + money(open) + "</b>"
     : "Search for their card above, or type what it books at.";
 
   var v = $("buVerdict"), cls = "verdict", vt, say;
@@ -1452,7 +1745,7 @@ function buildPrintSheet(){
         var meta = [c.set, c.num, c.cond].filter(Boolean).join(" · ");
         return '<div class="psRow"><span class="nm">' + esc(c.name) +
           (meta ? '<small>' + esc(meta) + '</small>' : "") + '</span>' +
-          '<span class="pr">' + money(c.market) + '</span></div>';
+          '<span class="pr">' + money(valueOf(c)) + '</span></div>';
       }).join("")
     : '<p class="psNone">No priced cards yet. Import your cards and price them in Prep first.</p>';
 }
@@ -1483,12 +1776,14 @@ function renderCust(){
   }else if(deal.tab === "sell"){
     var c = deal.sellId ? cardById(deal.sellId) : null;
     n.textContent = c ? c.name : "Sell";
-    num.textContent = c ? money(Number(c.market) || 0) : "$0";
+    num.textContent = c ? money(valueOf(c)) : "$0";
     msg.textContent = c ? "Market value" : "Pick a card first";
   }else{
+    var bg = buyGradePct();
     n.textContent = deal.buyPick ? deal.buyPick.name : "Your card";
-    num.textContent = deal.buyMkt != null ? money(deal.buyMkt) : "$0";
-    msg.textContent = deal.buyMkt != null ? "Market value" : "Nothing entered yet";
+    num.textContent = deal.buyMkt != null ? money(deal.buyMkt * bg) : "$0";
+    msg.textContent = deal.buyMkt == null ? "Nothing entered yet"
+      : (S.condOn && deal.buyGrade !== "nm" ? gradeName(deal.buyGrade) + " value" : "Market value");
   }
 }
 function toggleCust(on){
@@ -1981,6 +2276,20 @@ $("delCaseBtn").addEventListener("click", function(){
 });
 
 document.addEventListener("click", function(e){
+  var chip = e.target.closest(".gchip[data-gi]");
+  if(chip){
+    var ci = parseInt(chip.dataset.gi, 10), card = deal.theirs[ci];
+    if(card){
+      var cur = readCond(card.cond) || "nm";
+      if(cur === "?") cur = "nm";
+      var at = 0;
+      for(var k = 0; k < GRADES.length; k++){ if(GRADES[k].key === cur) at = k; }
+      card.cond = GRADES[(at + 1) % GRADES.length].name;
+      renderTrade();
+      if($("cust").classList.contains("on")) renderCust();
+    }
+    return;
+  }
   var s = e.target.closest(".slot[data-side]"); if(!s) return;
   var side = s.dataset.side, i = parseInt(s.dataset.i, 10);
   (side === "mine" ? deal.mine : deal.theirs).splice(i, 1);
@@ -2122,6 +2431,12 @@ var buySearch = installSearch({
     if(deal.buyMkt == null) $("buMkt").focus(); else $("buAsk").focus();
   }
 });
+$("buGrades").addEventListener("click", function(e){
+  var b = e.target.closest("[data-bg]"); if(!b) return;
+  deal.buyGrade = b.dataset.bg;
+  renderBuy();
+  if($("cust").classList.contains("on")) renderCust();
+});
 $("buPick").addEventListener("click", clearBuyPick);
 function clearBuyPick(){
   deal.buyPick = null;
@@ -2157,7 +2472,7 @@ $("buAsk").addEventListener("input", function(){ deal.buyAsk = parseMoney(this.v
 $("trClear").addEventListener("click", function(){ deal.mine = []; deal.theirs = []; render(); });
 $("seClear").addEventListener("click", function(){ deal.sellId = null; deal.sellOffer = null; $("seOffer").value = ""; render(); });
 $("buClear").addEventListener("click", function(){
-  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null;
+  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null; deal.buyGrade = "nm";
   $("buMkt").value = ""; $("buAsk").value = ""; buySearch.clear();
   renderBuy(); if($("cust").classList.contains("on")) renderCust();
 });
@@ -2190,13 +2505,24 @@ $("buDone").addEventListener("click", function(){
   logDeal(found ? "Bought " + found.name : "Bought a card", -deal.buyAsk, null);
   S.cards.push({ id: seq++,
     name: found ? found.name : "Bought card, name it later",
-    set: found ? found.set : "", num: found ? found.num : "", cond: "",
+    set: found ? found.set : "", num: found ? found.num : "",
+    cond: S.condOn ? gradeName(deal.buyGrade) : "",
     market: deal.buyMkt, cost: deal.buyAsk,
     img: found ? found.img : undefined });
-  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null;
+  deal.buyMkt = null; deal.buyAsk = null; deal.buyPick = null; deal.buyGrade = "nm";
   $("buMkt").value = ""; $("buAsk").value = ""; buySearch.clear();
   save(); render();
 });
+$("condBtn").addEventListener("click", function(){
+  S.condOn = !S.condOn;
+  save(); render();
+});
+$("condReport").addEventListener("input", function(e){
+  var f = e.target.closest("[data-grade]"); if(!f) return;
+  var v = parseFloat(f.value);
+  if(isFinite(v) && v >= 0 && v <= 100){ S.cond[f.dataset.grade] = v; save(); render(); }
+});
+
 $("logClear").addEventListener("click", function(){
   if(!S.log.length || !confirm("Clear today's deals? The cards themselves stay.")) return;
   S.log = []; save(); renderLog();
