@@ -2523,14 +2523,16 @@ function lotTile(row){
   var pic = LOT_PIC[no]
     ? '<img loading="lazy" alt="' + esc(row[1]) + '" src="data:image/jpeg;base64,' + LOT_PIC[no] + '">'
     : '<div style="aspect-ratio:150/227"></div>';
+  /* Escaped like every other field even though parseMoney has already stripped
+     these to digits. The renderer should not have to know that. */
   var price = st === "sold"
     ? '<div class="lotpr"><label for="lp' + no + '">Got</label>' +
       '<input id="lp' + no + '" data-lp="' + no + '" inputmode="decimal" placeholder="0.00" value="' +
-      (r.got == null ? "" : r.got) + '"></div>'
+      esc(r.got == null ? "" : r.got) + '"></div>'
     : st === "table"
     ? '<div class="lotpr"><label for="lp' + no + '">Asking</label>' +
       '<input id="lp' + no + '" data-lp="' + no + '" inputmode="decimal" placeholder="' +
-      round2(row[5]) + '" value="' + (r.ask == null ? "" : r.ask) + '"></div>'
+      round2(row[5]) + '" value="' + esc(r.ask == null ? "" : r.ask) + '"></div>'
     : '';
   return '<div class="' + cls + '" data-lot="' + no + '">' +
     '<div class="pic">' + pic + '<span class="no">' + no + '</span>' +
