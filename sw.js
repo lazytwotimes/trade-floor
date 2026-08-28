@@ -6,7 +6,7 @@
    never on the critical path.
 
    Bump CACHE when the app changes, or browsers will keep serving the old one. */
-var CACHE = "trade-floor-v19";
+var CACHE = "trade-floor-v20";
 var SHELL = [
   "./",
   "./index.html",

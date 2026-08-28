@@ -2640,8 +2640,12 @@ function lotToBinder(){
     if(lotStatus(row) === "sold") return;            /* gone is gone, do not restock */
     var cond = lotCondText(row[4]);
     var key = cardKey(row[1], row[3], row[2], cond);
-    if(!want[key]) want[key] = { row:row, cond:cond, qty:0 };
+    /* Two copies of the same card are two slots in the lot with two photos.
+       Keep both numbers so the second copy gets its own picture rather than a
+       second print of the first one. */
+    if(!want[key]) want[key] = { row:row, cond:cond, qty:0, nos:[] };
     want[key].qty++;
+    want[key].nos.push(row[0]);
   });
   var added = 0, held = 0, jobs = [];
   Object.keys(want).forEach(function(key){
@@ -2649,12 +2653,12 @@ function lotToBinder(){
     if(need < 0) need = 0;
     held += w.qty - need;
     for(var i = 0; i < need; i++){
-      var id = seq++;
+      var id = seq++, no = w.nos[have + i] || w.nos[w.nos.length - 1];
       S.cards.push({
         id: id, name: w.row[1], set: w.row[3], num: w.row[2], cond: w.cond,
-        market: w.row[5], cost: lotCost(w.row), lot: w.row[0]
+        market: w.row[5], cost: lotCost(w.row), lot: no
       });
-      jobs.push([id, w.row[0]]);
+      jobs.push([id, no]);
       added++;
     }
     var seen = Number(S.imported[key]) || 0;
@@ -3417,9 +3421,13 @@ if(!("serviceWorker" in navigator) || location.protocol.indexOf("http") !== 0){
 if("serviceWorker" in navigator && location.protocol.indexOf("http") === 0){
   window.addEventListener("load", function(){
     navigator.serviceWorker.register("sw.js").then(function(reg){
-      reg.update();
+      /* Asking is allowed to fail. At a hall with no signal it will fail every
+         time the app comes back to the front, and an uncaught one of those is a
+         console full of red for a question that simply has no answer today. */
+      function ask(){ try{ reg.update()["catch"](function(){}); }catch(e){} }
+      ask();
       document.addEventListener("visibilitychange", function(){
-        if(!document.hidden) reg.update();
+        if(!document.hidden) ask();
       });
       showVersion();
       /* On a first install the cache does not exist yet when the page loads,
