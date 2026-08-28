@@ -25,6 +25,14 @@ automatically, and print a price list. Do this at home, where there is internet.
 
 **Day.** Every sale and trade logged, with the day's totals.
 
+**Lot.** The 116 card binder bought as a job lot at 80% of value on 24 August
+2026, with a photo of every card. The values are frozen at that date on purpose:
+a card sold in November is still measured against what it actually cost. Mark a
+card as in the binder, on the table, or sold, type what you got for it, and the
+bar at the top shows how close the lot is to paying for itself. The twelve cards
+that were in the binder that day and are missing from the Deck Tradr export are
+marked sold already, waiting for a price.
+
 ## Running it
 
 Open `index.html`. That is the whole setup.
