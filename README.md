@@ -33,6 +33,18 @@ bar at the top shows how close the lot is to paying for itself. The twelve cards
 that were in the binder that day and are missing from the Deck Tradr export are
 marked sold already, waiting for a price.
 
+**Put these in the binder** copies every card still in the lot into the binder
+with its picture, so it searches, goes in the case, and prices itself in a trade
+or a sale against what you actually paid. It adds what is missing and never
+overwrites, so pressing it twice doubles nothing.
+
+## Getting around
+
+The four pages sit in a bar that never scrolls away: pinned to the bottom on a
+phone, under your thumb, and to the top on a laptop. On a screen too narrow to
+hold the case and the deal calculator side by side, the Table page splits in two
+so the calculator is not below the whole binder in the middle of a deal.
+
 ## Running it
 
 Open `index.html`. That is the whole setup.

@@ -95,7 +95,46 @@ header{
 .tool.big{font-weight:600}
 
 /* ---------- mode switch ---------- */
-.modes{display:flex;gap:5px;background:var(--slot);border-radius:var(--r-ctl);padding:4px;margin-bottom:18px;width:fit-content}
+/* The bar never scrolls away. On a laptop it sits at the top of the page, on a
+   phone it sits at the bottom under the thumb, the way every other app on that
+   phone works. Before this it lived in the page and you had to scroll a hundred
+   and sixteen cards back up to change page. */
+.navbar{
+  position:sticky;top:0;z-index:40;background:var(--sheet);
+  padding:8px 0 10px;margin-bottom:14px;border-bottom:1px solid var(--edge);
+}
+.modes{display:flex;gap:5px;background:var(--slot);border-radius:var(--r-ctl);padding:4px;width:fit-content}
+.halves{display:none;gap:5px;background:var(--slot);border-radius:var(--r-ctl);padding:4px;margin-top:6px}
+.halves button{
+  flex:1;padding:7px 10px;border-radius:var(--r-chip);font-size:13px;font-weight:600;color:var(--soft);
+  transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease);
+}
+.halves button:hover{color:var(--ink)}
+.halves button[aria-selected="true"]{
+  background:var(--sheet);color:var(--ink);
+  box-shadow:0 1px 2px rgba(20,26,34,.08),0 1px 1px rgba(20,26,34,.04);
+}
+/* Below the point where the two columns stop sitting side by side, the deal
+   calculator ends up under the whole binder. Mid deal that is a long scroll
+   with a person waiting, so show one half at a time instead. */
+@media (max-width:839px){
+  body.m-table .halves{display:flex}
+  body.m-table.half-deal #tCase{display:none}
+  body.m-table.half-case #tDeal{display:none}
+}
+@media (max-width:700px){
+  .navbar{
+    position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;
+    border-top:1px solid var(--edge);border-bottom:0;
+    box-shadow:0 -2px 12px rgba(20,26,34,.07);
+    padding:7px max(10px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-right));
+  }
+  .navbar .modes{width:auto}
+  .navbar .modes button{flex:1;padding:9px 4px}
+  /* room for the bar, and more of it when the second row is showing */
+  body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+  body.m-table{padding-bottom:calc(126px + env(safe-area-inset-bottom))}
+}
 .modes button{
   padding:7px 17px;border-radius:var(--r-chip);font-size:13.5px;font-weight:600;color:var(--soft);
   transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease);
@@ -595,7 +634,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 @media print{
   @page{margin:12mm 10mm}
   body{padding:0;max-width:none;background:#fff;color:#000;font-size:10pt}
-  header,.modes,#v-table,#v-prep,#v-day,#v-lot,#cust{display:none !important}
+  header,.navbar,.modes,#v-table,#v-prep,#v-day,#v-lot,#cust{display:none !important}
   #printsheet{display:block}
   .psHead{
     display:flex;justify-content:space-between;align-items:baseline;gap:12px;
@@ -634,18 +673,24 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
 
 <div id="warn" role="status"></div>
 
-<div class="modes" role="tablist" aria-label="Mode">
-  <button role="tab" id="m-table" aria-selected="true">Table</button>
-  <button role="tab" id="m-prep" aria-selected="false">Prep</button>
-  <button role="tab" id="m-day" aria-selected="false">Day</button>
-  <button role="tab" id="m-lot" aria-selected="false">Lot</button>
+<div class="navbar">
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" id="m-table" aria-selected="true">Table</button>
+    <button role="tab" id="m-prep" aria-selected="false">Prep</button>
+    <button role="tab" id="m-day" aria-selected="false">Day</button>
+    <button role="tab" id="m-lot" aria-selected="false">Lot</button>
+  </div>
+  <div class="halves" role="tablist" aria-label="Part of the table">
+    <button role="tab" id="h-case" aria-selected="true">Case and binder</button>
+    <button role="tab" id="h-deal" aria-selected="false">The deal</button>
+  </div>
 </div>
 
 <!-- =================== TABLE =================== -->
 <div id="v-table">
 <div class="wrap">
 
-  <div>
+  <div id="tCase">
     <div class="panel">
       <h2>The case
         <span style="display:flex;align-items:center;gap:9px">
@@ -706,7 +751,7 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="tDeal">
     <div class="dealtabs" role="tablist" aria-label="Deal type">
       <button role="tab" id="t-trade" aria-selected="true">Trade</button>
       <button role="tab" id="t-sell" aria-selected="false">Sell</button>
@@ -903,6 +948,13 @@ button.slot:hover{border-color:var(--bad);transform:translateY(-2px)}
       <div class="rbar"><i id="loBar"></i></div>
       <p class="hint" style="margin-top:9px" id="loSay"></p>
     </div>
+    <div class="btnrow">
+      <button class="btn" id="lotToBinder">Put these in the binder</button>
+    </div>
+    <div class="status" id="lotBinderSt"></div>
+    <p class="hint" style="margin-top:8px">This copies every card still in the lot into the binder, with its picture,
+      the value it had on the day, and what you paid for it. From there it searches, goes in the case, and prices itself
+      in a trade or a sale. Cards already in the binder are left alone, so pressing it twice doubles nothing.</p>
   </div>
 
   <div class="panel" style="margin-top:16px">
@@ -2561,6 +2613,77 @@ function lotPaint(no){
   tmp.innerHTML = lotTile(row);
   el.parentNode.replaceChild(tmp.firstChild, el);
 }
+/* The tracker writes a blank when a card is near mint, but blank in the binder
+   means nobody recorded it. Say what it actually is. */
+function lotCondText(c){
+  return c === "LP" ? "Lightly Played" : c === "MP" ? "Moderately Played" : "Near Mint";
+}
+/* Turn a lot photo back into the same kind of blob the picture fetcher stores,
+   so the case, the binder rows and the buyer view all show it with no further
+   work and no signal. Done without fetch() so nothing touches the network layer. */
+function lotBlob(no){
+  var b64 = LOT_PIC[no];
+  if(!b64) return null;
+  try{
+    var bin = atob(b64), n = bin.length, arr = new Uint8Array(n);
+    for(var i = 0; i < n; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type:"image/jpeg" });
+  }catch(e){ return null; }
+}
+/* Adds what is missing and never removes or overwrites, because a card in the
+   binder may have been priced or renamed by hand since. Counted by identity the
+   same way the spreadsheet import counts, so three of the same Mimikyu stay three. */
+function lotToBinder(){
+  var st = $("lotBinderSt");
+  var counts = countCardsByKey(), want = {};
+  LOT_SEED.forEach(function(row){
+    if(lotStatus(row) === "sold") return;            /* gone is gone, do not restock */
+    var cond = lotCondText(row[4]);
+    var key = cardKey(row[1], row[3], row[2], cond);
+    if(!want[key]) want[key] = { row:row, cond:cond, qty:0 };
+    want[key].qty++;
+  });
+  var added = 0, held = 0, jobs = [];
+  Object.keys(want).forEach(function(key){
+    var w = want[key], have = alreadyHave(key, counts), need = w.qty - have;
+    if(need < 0) need = 0;
+    held += w.qty - need;
+    for(var i = 0; i < need; i++){
+      var id = seq++;
+      S.cards.push({
+        id: id, name: w.row[1], set: w.row[3], num: w.row[2], cond: w.cond,
+        market: w.row[5], cost: lotCost(w.row), lot: w.row[0]
+      });
+      jobs.push([id, w.row[0]]);
+      added++;
+    }
+    var seen = Number(S.imported[key]) || 0;
+    S.imported[key] = Math.max(seen, w.qty, counts[key] || 0);
+  });
+  if(!added){
+    st.className = "status";
+    st.textContent = held
+      ? "Every card in the lot is already in the binder. Nothing added."
+      : "Nothing to add. Every card in the lot is marked sold.";
+    save();
+    return;
+  }
+  var pics = 0;
+  Promise.all(jobs.map(function(j){
+    var bl = lotBlob(j[1]);
+    if(!bl) return Promise.resolve();
+    return Store.putImg(j[0], bl).then(function(){ pics++; })["catch"](function(){});
+  })).then(loadStoredImages).then(function(){
+    save(); render();
+    st.className = "status ok";
+    st.textContent = "Put " + plural(added, "card") + " in the binder, " + plural(pics, "picture") + " with them." +
+      (held ? " Left " + plural(held, "card") + " alone that was already there." : "");
+  })["catch"](function(){
+    save(); render();
+    st.className = "status";
+    st.textContent = "Put " + plural(added, "card") + " in the binder, but the pictures would not save.";
+  });
+}
 function renderLot(){
   var rows = lotRows();
   $("lotGrid").innerHTML = rows.map(lotTile).join("");
@@ -2571,14 +2694,29 @@ function renderLot(){
 }
 
 /* ============================ wiring ============================ */
-function setMode(m){
+function setMode(m, jump){
   ["table","prep","day","lot"].forEach(function(k){
     $("v-" + k).style.display = k === m ? "" : "none";
     $("m-" + k).setAttribute("aria-selected", k === m ? "true" : "false");
+    document.body.classList.toggle("m-" + k, k === m);
   });
+  /* Landing halfway down a new page is disorienting, and with the bar pinned
+     there is nothing at the top to anchor you. */
+  if(jump) window.scrollTo(0, 0);
 }
 ["table","prep","day","lot"].forEach(function(k){
-  $("m-" + k).addEventListener("click", function(){ setMode(k); });
+  $("m-" + k).addEventListener("click", function(){ setMode(k, true); });
+});
+/* Which half of the table is showing, on a screen too narrow for both. */
+function setHalf(h, jump){
+  ["case","deal"].forEach(function(k){
+    document.body.classList.toggle("half-" + k, k === h);
+    $("h-" + k).setAttribute("aria-selected", k === h ? "true" : "false");
+  });
+  if(jump) window.scrollTo(0, 0);
+}
+["case","deal"].forEach(function(k){
+  $("h-" + k).addEventListener("click", function(){ setHalf(k, true); });
 });
 
 /* ---------- the lot ---------- */
@@ -2602,6 +2740,7 @@ function lotSeedOf(no){
   for(var i = 0; i < LOT_SEED.length; i++){ if(LOT_SEED[i][0] === no) return LOT_SEED[i]; }
   return null;
 }
+$("lotToBinder").addEventListener("click", lotToBinder);
 $("lotSearch").addEventListener("input", function(){ lotView.q = this.value; renderLot(); });
 $("lotSorts").addEventListener("click", function(e){
   var b = e.target.closest("[data-lsort]");
@@ -3049,7 +3188,7 @@ document.addEventListener("keydown", function(e){
   var typing = t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
   if(e.key === "Escape"){ toggleCust(false); return; }
   if(typing) return;
-  if(e.key === "/"){ e.preventDefault(); setMode("table"); $("search").focus(); $("search").select(); }
+  if(e.key === "/"){ e.preventDefault(); setMode("table"); setHalf("case"); $("search").focus(); $("search").select(); }
   else if(e.key === "c" || e.key === "C"){ toggleCust(); }
   else if(e.key === "p" || e.key === "P"){ setProfit(!S.showProfit); }
 });
@@ -3223,6 +3362,8 @@ load().then(function(){
   repairQuotes();
   return loadStoredImages();
 }).then(function(){
+  setMode("table");
+  setHalf("case");
   render();
   return Store.healthy();
 }).then(function(ok){
