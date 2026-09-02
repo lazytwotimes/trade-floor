@@ -1,7 +1,7 @@
 {
   "name": "Trade Floor",
   "short_name": "Trade Floor",
-  "description": "Card show deal calculator and case display for Lazy's Rest Stop.",
+  "description": "Card show deal calculator and case display for Heavy Sleeper Cards.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
